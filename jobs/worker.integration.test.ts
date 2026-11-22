@@ -2,6 +2,8 @@
 import { createTestDb } from "@/lib/testing/testDb";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
+import { getAgentMeta } from "@/agents/_shared/catalog";
+import { createPlaceholderDefinition } from "@/agents/_shared/placeholder";
 import type { AgentJobInput, AnyAgentDefinition } from "@/agents/_shared/types";
 import { PrismaClient } from "@/lib/generated/prisma/client";
 import { applyEvent, completeStage, type PipelineDeps } from "@/lib/pipeline/service";
@@ -99,7 +101,9 @@ describe.skipIf(!url)("worker sur base réelle", () => {
 
   it("garde en file un agent pas encore implémenté (définition provisoire)", async () => {
     const { videoId } = await videoInScript();
-    await processNextJob({ db, notifier, llm: llm("{}") }, claimNextJob);
+    // Définition provisoire injectée : le vrai scénariste est implémenté depuis la fusion de son fork.
+    const placeholder: AnyAgentDefinition = createPlaceholderDefinition(getAgentMeta(4), z.object({}));
+    await processNextJob({ db, notifier, llm: llm("{}"), definitionFor: () => placeholder }, claimNextJob);
     expect(await db.agentJob.findFirstOrThrow({ where: { videoId } })).toMatchObject({ status: "QUEUED", lastError: "Agent à implémenter : Scénariste" });
   });
 
