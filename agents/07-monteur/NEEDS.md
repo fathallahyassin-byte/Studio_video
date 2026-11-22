@@ -42,6 +42,9 @@ Pour la session principale. Rien ici n'a été modifié par le fork.
   ```
   C'est le format en cours dans le fork de l'agent 6 (`audioPlan.ts`). À défaut, elle prend le dernier `Asset` VOICE (`url`, `durationS`) et MUSIC (`url`, `license`), **sans horodatage** (aucune colonne ne le stocke).
 - **Pourquoi** : sur `main`, l'agent 6 n'écrit encore ni voix ni horodatage. Si son format final diffère, seule cette fonction change (et `makeAudioJson` dans `fixtures.ts`). Si l'horodatage est stocké ailleurs (colonne ou `Asset`), dis-le-moi.
+- **Vérifié contre le fork de l'agent 6 (commit `2c382ee`, pas encore dans `main`)** : `schema.ts` inchangé ; son `audioPlanSchema` (`agents/06-voix-son/audioPlan.ts`) a exactement ces champs (`voix.url`, `voix.duree_s`, `voix.mots[{ word, startS, endS }]`, `musique.url`, `musique.licence`). Rien à adapter. Une fois fusionné, `readAudioDeliverable` pourra importer son `parseStoredAudioPlan` au lieu de son schéma local (une ligne ; je ne l'ai pas fait pour ne pas dépendre d'un fichier absent de `main`).
+- **Ses `effets[].plan` peuvent valoir `B1`, `B2`…** (numéro de beat) : sans incidence, le monteur ne place aucun effet faute de fichier.
+- **« Régénérer la voix » à l'étape `EDIT`** (panneau de l'agent 6) : une timeline déjà produite garde l'ancienne voix et l'ancien horodatage. Il faudra relancer le montage après une régénération (côté pipeline : remettre `timelineJson` à `null` et recréer la tâche de l'agent 7, ou interdire la régénération une fois la timeline écrite).
 
 ## 5. Ce qui lit la timeline ailleurs
 
