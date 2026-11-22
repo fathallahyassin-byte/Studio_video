@@ -328,18 +328,20 @@ model Validation {
 }
 
 model Asset {
-  id        String    @id @default(cuid())
-  videoId   String
-  video     Video     @relation(fields: [videoId], references: [id])
-  type      AssetType
-  url       String
-  provider  String
+  id            String    @id @default(cuid())
+  videoId       String
+  video         Video     @relation(fields: [videoId], references: [id])
+  type          AssetType
+  url           String
+  provider      String
   /// Obligatoire pour la musique (contrainte CHECK dans la migration)
-  license   String?
+  license       String?
   /// Plan du storyboard (P1, P2…) pour les images et vidéos
-  planId    String?
-  durationS Float?
-  createdAt DateTime  @default(now())
+  planId        String?
+  durationS     Float?
+  /// Médias générés : vidéo:plan:tentative:empreinte de la requête. Une génération payante déjà enregistrée n'est jamais relancée.
+  generationKey String?   @unique
+  createdAt     DateTime  @default(now())
 
   @@index([videoId, type])
 }

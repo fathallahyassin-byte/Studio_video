@@ -184,7 +184,7 @@ export type FakeStoryboardPorts = {
 
 /** Vidéo en mémoire : les transitions changent l'étape comme le ferait lib/pipeline (MEDIA_DONE attend l'agent 6). */
 export function makePorts(options: PortOptions = {}): FakeStoryboardPorts {
-  const video: StoryboardVideo = { stage: options.stage ?? "VISUALS_AND_AUDIO", blockedAt: null, script: makeScript(), storyboard: null, totalCost: 0.2, ...options.video };
+  const video: StoryboardVideo = { stage: options.stage ?? "VISUALS_AND_AUDIO", blockedAt: null, script: makeScript(), storyboard: null, previousStoryboard: null, totalCost: 0.2, ...options.video };
   const image = makeImageProvider();
   const videoGen = makeVideoProvider();
   const tools: VisualTools = options.tools === "none" ? { image: null, video: null } : (options.tools ?? { image, video: videoGen });

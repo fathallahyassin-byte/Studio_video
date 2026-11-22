@@ -37,7 +37,7 @@ export function createStoryboardDefinition(getPorts: () => StoryboardPorts): Sto
       const video = await loadVideoWithScript(ports, requireVideoId(input));
       const { tools } = ports.media;
       return {
-        SCRIPT: formatScriptVariable(readScript(video.script), input.note, parseStoredStoryboard(video.storyboard)),
+        SCRIPT: formatScriptVariable(readScript(video.script), input.note, parseStoredStoryboard(video.previousStoryboard)),
         OUTILS_VISUELS: formatVisualTools({ image: tools.image?.name ?? null, video: tools.video?.name ?? null }),
         BUDGET_SECONDES_VIDEO_IA: formatBudgetSeconds(readVideoAiBudget(ports.budgets())),
       };

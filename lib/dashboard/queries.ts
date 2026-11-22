@@ -1,6 +1,8 @@
 import { agentCatalog, parseAgentId } from "@/agents/_shared/catalog";
 import { loadScriptTarget } from "@/agents/04-scenariste/ui/loadScripts";
 import { toScriptContent, type ScriptContent } from "@/agents/04-scenariste/ui/scripts";
+import { loadStoryboardView } from "@/agents/05-directeur-artistique/ui/loadStoryboards";
+import type { StoryboardView } from "@/agents/05-directeur-artistique/ui/storyboards";
 import type { Platform, PrismaClient, Stage } from "@/lib/generated/prisma/client";
 import { deriveAgentState, type AgentState } from "./agentStatus";
 import { buildBoard, type BoardColumn } from "./board";
@@ -88,7 +90,8 @@ export type QueueDetail =
   | { kind: "ideas"; ideas: IdeaRow[] }
   /** script préparé pour l'affichage (faits du dossier, compteurs) ; null s'il est illisible */
   | { kind: "script"; videoId: string; review: ScriptContent | null }
-  | { kind: "qa"; videoId: string; report: QaReport | null; suggestedReturn: V3ReturnStage }
+  /** storyboard : plans de l'agent 5 et leur label IA, à voir avant le GO ; null s'il manque */
+  | { kind: "qa"; videoId: string; report: QaReport | null; suggestedReturn: V3ReturnStage; storyboard: StoryboardView | null }
   | { kind: "fix"; videoId: string; reason: string | null; blockedAt: Stage | null; sources: string[] };
 
 /** Étape où renvoyer la vidéo en V3, d'après l'agent responsable du premier point « ko ». */
@@ -136,7 +139,7 @@ export async function getQueueDetail(db: PrismaClient, item: QueueItem): Promise
   }
   if (item.gate === "FIX") return { kind: "fix", videoId, reason: video?.blockedReason ?? null, blockedAt: video?.blockedAt ?? null, sources: video?.researchSources ?? [] };
   const report = parseQaReport(video?.qaJson);
-  return { kind: "qa", videoId, report, suggestedReturn: suggestReturnStage(report) };
+  return { kind: "qa", videoId, report, suggestedReturn: suggestReturnStage(report), storyboard: await loadStoryboardView(db, videoId) };
 }
 
 export type AgentCard = {

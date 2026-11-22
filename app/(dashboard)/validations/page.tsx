@@ -10,6 +10,7 @@ import { doneMessage } from "./messages";
 import { formatRelative, formatVideoNumber } from "@/lib/dashboard/format";
 import type { QaReport } from "@/lib/dashboard/payloads";
 import { ScriptReview } from "@/agents/04-scenariste/ui/ScriptParts";
+import { StoryboardSummary } from "@/agents/05-directeur-artistique/ui/StoryboardSummary";
 import { qaCheckLabel, qaDecisionLabels, qaStatusLabels } from "@/lib/dashboard/qaChecklist";
 import { getQueueDetail, getValidationData, type IdeaRow, type QueueDetail } from "@/lib/dashboard/queries";
 import { selectQueueItem } from "@/lib/dashboard/queue";
@@ -121,6 +122,7 @@ function DetailBody({ detail }: { detail: QueueDetail }) {
       return (
         <>
           {detail.report ? <QaDetail report={detail.report} /> : <Unreadable />}
+          {detail.storyboard ? <StoryboardSummary storyboard={detail.storyboard} /> : null}
           <VideoDecisionForm videoId={detail.videoId} gate="V3" suggestedReturn={detail.suggestedReturn} />
         </>
       );

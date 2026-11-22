@@ -142,7 +142,7 @@ describe("directeur artistique avec runAgent (faux LLM, faux générateurs)", ()
 
 describe("buildVariables", () => {
   it("note de l'humain : ajoutée à {{SCRIPT}} avec le storyboard précédent", async () => {
-    const ctx = setup([json(makeStoryboard())], { note: "Plans trop sombres.", video: { storyboard: makeStoryboard({ couverture: { plan: "P01", texte: "Version 1" } }) } });
+    const ctx = setup([json(makeStoryboard())], { note: "Plans trop sombres.", video: { previousStoryboard: makeStoryboard({ couverture: { plan: "P01", texte: "Version 1" } }) } });
     await ctx.run();
     const script = ctx.store.runs[0]?.input.SCRIPT ?? "";
     expect(script).toContain(`${CORRECTION_HEADING} :\nPlans trop sombres.`);
