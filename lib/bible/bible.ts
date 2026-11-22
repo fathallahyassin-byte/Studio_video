@@ -22,6 +22,8 @@ export type BibleFields = {
   ton: string;
   dureeMin: number;
   dureeMax: number;
+  /** format_video.debit_voix_mots_par_s : sert au calcul du nombre de mots d'un script */
+  debitVoix: number;
   voix: string;
   cta: string;
   piliers: string[];
@@ -35,6 +37,7 @@ const PATHS = {
   promesse: ["chaine", "promesse"],
   ton: ["ligne_editoriale", "ton"],
   duree: ["format_video", "duree_cible_s"],
+  debitVoix: ["format_video", "debit_voix_mots_par_s"],
   voix: ["identite", "voix"],
   cta: ["identite", "cta"],
   piliers: ["ligne_editoriale", "piliers"],
@@ -69,6 +72,7 @@ export function checkBible(yamlText: string): BibleCheck {
       ton: bible.ligne_editoriale.ton,
       dureeMin,
       dureeMax,
+      debitVoix: bible.format_video.debit_voix_mots_par_s,
       voix: bible.identite.voix,
       cta: bible.identite.cta,
       piliers: bible.ligne_editoriale.piliers,
@@ -87,6 +91,7 @@ export function applyBibleFields(yamlText: string, fields: BibleFields): string 
   doc.setIn([...PATHS.ton], fields.ton);
   doc.setIn([...PATHS.voix], fields.voix);
   doc.setIn([...PATHS.cta], fields.cta);
+  doc.setIn([...PATHS.debitVoix], fields.debitVoix);
   setFlowList(doc, PATHS.duree, [fields.dureeMin, fields.dureeMax]);
   setFlowList(doc, PATHS.piliers, fields.piliers);
   setFlowList(doc, PATHS.sujetsInterdits, fields.sujetsInterdits);

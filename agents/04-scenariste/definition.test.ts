@@ -199,9 +199,13 @@ describe("buildVariables", () => {
     await expect(ctx.scriptDefinition.buildVariables({ ...ctx.input, videoId: null }, ctxOf(TEST_BIBLE))).rejects.toThrow(AgentPreconditionError);
   });
 
-  it("normalize appelé sans buildVariables pour cette tâche : erreur explicite", () => {
+  it("normalize et controls lisent la cible dans la bible de l'appel, sans dépendre de buildVariables", async () => {
     const ctx = setup([]);
-    expect(() => ctx.scriptDefinition.normalize?.(makeScript(), ctx.input)).toThrow(/avant buildVariables/);
+    const slowerBible = TEST_BIBLE.replace("debit_voix_mots_par_s: 2", "debit_voix_mots_par_s: 2.5");
+    const normalized = await ctx.scriptDefinition.normalize?.(makeScript(), ctx.input, ctxOf(slowerBible));
+    expect(normalized).toMatchObject({ nb_mots: 50, duree_estimee_s: 20, verifications: { duree_ok: false } });
+    const results = await ctx.scriptDefinition.controls?.(makeScript(), ctx.input, ctxOf(slowerBible));
+    expect(results).toContainEqual({ ok: false, reason: expect.stringContaining("2.5 mots/s") });
   });
 });
 

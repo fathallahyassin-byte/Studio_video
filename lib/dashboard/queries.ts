@@ -1,9 +1,11 @@
 import { agentCatalog, parseAgentId } from "@/agents/_shared/catalog";
+import { loadScriptTarget } from "@/agents/04-scenariste/ui/loadScripts";
+import { toScriptContent, type ScriptContent } from "@/agents/04-scenariste/ui/scripts";
 import type { Platform, PrismaClient, Stage } from "@/lib/generated/prisma/client";
 import { deriveAgentState, type AgentState } from "./agentStatus";
 import { buildBoard, type BoardColumn } from "./board";
 import { startOfMonth } from "./format";
-import { parseAnalystReport, parseIdea, parseQaReport, parseScript, type AnalystReportContent, type QaReport, type Script } from "./payloads";
+import { parseAnalystReport, parseIdea, parseQaReport, type AnalystReportContent, type QaReport } from "./payloads";
 import { buildQueue, QUEUE_STAGES, type QueueItem } from "./queue";
 import type { V3ReturnStage } from "@/lib/pipeline/machine";
 
@@ -84,7 +86,8 @@ export type IdeaRow = { videoId: string; number: number; title: string; score: n
 
 export type QueueDetail =
   | { kind: "ideas"; ideas: IdeaRow[] }
-  | { kind: "script"; videoId: string; script: Script | null }
+  /** script préparé pour l'affichage (faits du dossier, compteurs) ; null s'il est illisible */
+  | { kind: "script"; videoId: string; review: ScriptContent | null }
   | { kind: "qa"; videoId: string; report: QaReport | null; suggestedReturn: V3ReturnStage }
   | { kind: "fix"; videoId: string; reason: string | null; blockedAt: Stage | null; sources: string[] };
 
@@ -104,7 +107,19 @@ export async function getValidationData(db: PrismaClient, channelId: string) {
 export async function getQueueDetail(db: PrismaClient, item: QueueItem): Promise<QueueDetail> {
   const videos = await db.video.findMany({
     where: { id: { in: item.videoIds } },
-    select: { id: true, number: true, title: true, ideaJson: true, scriptJson: true, qaJson: true, blockedAt: true, blockedReason: true, researchSources: true },
+    select: {
+      id: true,
+      number: true,
+      title: true,
+      ideaJson: true,
+      scriptJson: true,
+      dossierJson: true,
+      qaJson: true,
+      blockedAt: true,
+      blockedReason: true,
+      researchSources: true,
+      channel: { select: { activeBibleVersionId: true } },
+    },
   });
   if (item.gate === "V1") {
     const ideas = videos.map((video): IdeaRow => {
@@ -115,7 +130,10 @@ export async function getQueueDetail(db: PrismaClient, item: QueueItem): Promise
   }
   const video = videos[0];
   const videoId = video?.id ?? "";
-  if (item.gate === "V2") return { kind: "script", videoId, script: parseScript(video?.scriptJson) };
+  if (item.gate === "V2") {
+    const target = await loadScriptTarget(db, video?.channel.activeBibleVersionId ?? null);
+    return { kind: "script", videoId, review: toScriptContent(video?.scriptJson, video?.dossierJson, target) };
+  }
   if (item.gate === "FIX") return { kind: "fix", videoId, reason: video?.blockedReason ?? null, blockedAt: video?.blockedAt ?? null, sources: video?.researchSources ?? [] };
   const report = parseQaReport(video?.qaJson);
   return { kind: "qa", videoId, report, suggestedReturn: suggestReturnStage(report) };

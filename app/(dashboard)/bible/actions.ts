@@ -19,6 +19,7 @@ const fieldsSchema = z.object({
   ton: z.string().trim().min(1),
   dureeMin: z.coerce.number().int().positive(),
   dureeMax: z.coerce.number().int().positive(),
+  debitVoix: z.coerce.number().positive().max(10),
   voix: z.string().trim().min(1),
   cta: z.string().trim(),
   piliers: z.string(),
@@ -59,7 +60,7 @@ async function saveContent(baseVersionId: string, content: string, note: string)
 export async function saveBibleFields(baseVersionId: string, _previous: BibleFormState, formData: FormData): Promise<BibleFormState> {
   await requireOwner();
   const parsed = fieldsSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { ok: false, message: "Remplis la niche, la promesse, le ton, la voix et des durées en secondes." };
+  if (!parsed.success) return { ok: false, message: "Remplis la niche, la promesse, le ton, la voix, des durées en secondes et un débit de voix (mots par seconde)." };
   const fields = parsed.data;
   if (fields.dureeMin > fields.dureeMax) return { ok: false, message: "La durée minimale dépasse la durée maximale." };
 

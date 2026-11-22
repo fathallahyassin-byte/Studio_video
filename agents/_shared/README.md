@@ -24,8 +24,8 @@ Session principale uniquement : un fork ne modifie aucun fichier de ce dossier, 
 - `definition.ts` : exporte `definition`, de type `AgentDefinition<AgentJobInput, typeof outputSchema>`.
   - Le worker lance chaque agent depuis une ligne `AgentJob` : l'entrée contient `videoId` (lis le reste en base : idée, dossier, script…), `channelId`, la `note` de l'humain et un `payload` (formulaire de l'agent 1, à valider avec Zod).
   - `buildVariables` : une valeur texte par `{{VARIABLE}}` du prompt (JSON sérialisé si besoin).
-  - `normalize` : les recalculs que ton AGENT.md demande « en code » (scores, confiances forcées…).
-  - `controls` : les refus en code ; chaque `{ ok: false, reason }` est renvoyé au modèle.
+  - `normalize` : les recalculs que ton AGENT.md demande « en code » (scores, confiances forcées…). Il reçoit `(sortie, input, ctx)` et peut être asynchrone ; `ctx.bible` est la bible injectée dans le prompt.
+  - `controls` : les refus en code ; chaque `{ ok: false, reason }` est renvoyé au modèle. Il reçoit aussi `ctx` : relis la bible ou la base ici plutôt que de garder un état entre `buildVariables` et `controls`.
   - `onSuccess` : enregistrement et transition. **Il doit être idempotent** : après un crash, il peut être rappelé avec la même sortie.
 - `ui/Panel.tsx` : exporte `Panel(props: AgentPanelProps)`, affiché sous l'en-tête générique de `/agents/[slug]`.
 

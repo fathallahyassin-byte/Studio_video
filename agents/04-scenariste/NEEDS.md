@@ -1,21 +1,17 @@
 # Besoins de l'agent 4 hors de son dossier
 
-## 1. Passer le contexte de l'appel à `normalize` et `controls` (contrat `agents/_shared/types.ts`)
+## 1. Passer le contexte de l'appel à `normalize` et `controls` : FAIT
 
-- **Quoi** : donner `ctx: AgentContext` (au moins `bible`) à `normalize(output, input, ctx)` et `controls(output, input, ctx)`, comme à `buildVariables` et `onSuccess`. `runAgent` l'a déjà sous la main (`prepared.ctx`).
-- **Pourquoi** : le scénariste recompte les mots avec le débit de la bible (`format_video.debit_voix_mots_par_s`) et la durée visée. Aujourd'hui `normalize` ne reçoit pas la bible : `definition.ts` garde la cible et les faits lus par `buildVariables` dans une `WeakMap` indexée par l'objet `input` (le même pour toute l'exécution de `runAgent`). Ça marche et ça ne fuit pas, mais ça repose sur un détail d'implémentation de `runAgent`.
-- **Côté fork, une fois fait** : supprimer la `WeakMap` de `definition.ts` et relire la cible depuis `ctx.bible` (environ 10 lignes).
+- **Intégré** : `normalize(sortie, input, ctx)` (éventuellement asynchrone) et `controls(sortie, input, ctx)` dans `agents/_shared/types.ts`, appelés par `lib/agents/runAgent.ts` avec le contexte de l'appel. `definition.ts` n'a plus de `WeakMap` : la cible vient de `ctx.bible`, les faits sont relus dans le dossier de la vidéo.
+- **Pourquoi** : le recomptage des mots dépend du débit de la bible, que `normalize` ne recevait pas.
 
-## 2. Exposer le débit de la voix dans `checkBible` (`lib/bible/bible.ts`)
+## 2. Exposer le débit de la voix dans `checkBible` : FAIT
 
-- **Quoi** : ajouter `debitVoix: number` (ou `wordsPerSecond`) à `BibleFields`, lu dans `format_video.debit_voix_mots_par_s`, que le schéma valide déjà.
-- **Pourquoi** : `checkBible` ne renvoie que `dureeMin` et `dureeMax`. `variables.ts` relit donc le YAML une deuxième fois (`yaml.parse` + un petit schéma Zod) pour le débit.
-- **Côté fork, une fois fait** : `parseScriptTarget` lit `checked.fields.debitVoix` et le second parsing disparaît.
+- **Intégré** : `BibleFields.debitVoix` (`format_video.debit_voix_mots_par_s`), lu par `checkBible`, réécrit par `applyBibleFields` et modifiable dans le formulaire de la bible. `variables.ts` ne relit plus le YAML.
 
-## 3. Suggestion : V2 avec les faits et les compteurs
+## 3. Afficher faits et compteurs en V2 : FAIT
 
-- **Quoi** : dans le détail V2 de « À valider », afficher sous chaque beat ses ids de faits cliquables (fait, confiance, source) et les compteurs mots / durée / écart, comme le panneau `/agents/04-scenariste`. Les fonctions pures sont prêtes : `toScriptView`, `computeCounters`, `formatGap` dans `agents/04-scenariste/ui/scripts.ts`, et `parseScriptTarget` dans `variables.ts`.
-- **Pourquoi** : c'est en V2 que l'humain décide avant toute génération payante. Il voit les beats, mais pas les faits qu'ils citent ni l'écart à la durée cible.
+- **Intégré** : le détail V2 de « À valider » affiche les mêmes briques que le panneau (`ui/ScriptParts.tsx`) : compteurs recalculés et écart avec la cible de la bible active, 3 accroches, frise minutée, beats avec ids de faits cliquables. `lib/dashboard/queries.ts` renvoie `review` (`toScriptContent`) au lieu du script brut.
 
 ## À savoir (rien à faire)
 
@@ -23,4 +19,4 @@
 - **Note de l'humain** (correction V2 ou reprise) : ajoutée à `{{IDEE}}` sous l'intitulé « CORRECTION DEMANDÉE PAR L'HUMAIN », suivie du script précédent s'il existe. Pas dans `{{APPRENTISSAGES}}`, que le prompt présente comme les enseignements de l'analyste.
 - **`{{DUREE_S}}`** vaut le milieu exact de `duree_cible_s` : 77.5 avec le modèle de bible ([65, 90]). Avec 2,6 mots/s, la cible est de 192 à 211 mots.
 - **`{{DERNIERS_SCRIPTS}}`** : un résumé par script publié (titre, ouverture et son type, ordre des rôles, dernière phrase), pas le JSON complet, pour limiter les tokens.
-- **Données de démo** : les scripts de `lib/demo/demoData.ts` ont des textes écran de 2 mots (« Pourquoi jaune ? ») et un nombre de mots qui ne correspond pas à leur durée. Ils restent lisibles par le schéma ; seuls les nouveaux scripts de l'agent sont contrôlés.
+- **Données de démo** : les scripts de `lib/demo/demoData.ts` ont des textes écran de 2 mots (« Pourquoi jaune ? ») et un nombre de mots qui ne correspond pas à leur durée. Ils restent lisibles par le schéma ; seuls les nouveaux scripts de l'agent sont contrôlés. En V2, leurs compteurs affichent donc « hors tolérance ».

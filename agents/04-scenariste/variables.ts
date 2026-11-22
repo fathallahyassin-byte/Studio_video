@@ -1,4 +1,3 @@
-import { parse } from "yaml";
 import { z } from "zod";
 import { outputSchema as dossierSchema } from "@/agents/03-recherchiste/schema";
 import { outputSchema as analystSchema } from "@/agents/10-analyste/schema";
@@ -20,24 +19,14 @@ export const CORRECTION_HEADING = "CORRECTION DEMANDÉE PAR L'HUMAIN (prioritair
 // Bible : durée cible et débit de la voix.
 // ---------------------------------------------------------------------------
 
-/** checkBible valide déjà ces clés ; on relit le débit, absent des champs du formulaire. */
-const speechRateSchema = z.object({ format_video: z.object({ debit_voix_mots_par_s: z.number().positive() }) });
-
 /** {{DUREE_S}} = milieu de format_video.duree_cible_s ; le débit sert au recomptage des mots. */
 export function parseScriptTarget(bible: string): { ok: true; target: ScriptTarget } | { ok: false; error: string } {
   const checked = checkBible(bible);
   if (!checked.ok) return { ok: false, error: checked.error };
-  const rate = speechRateSchema.safeParse(parse(bible));
-  if (!rate.success) return { ok: false, error: "format_video.debit_voix_mots_par_s manque." };
-  const { dureeMin, dureeMax } = checked.fields;
+  const { dureeMin, dureeMax, debitVoix } = checked.fields;
   return {
     ok: true,
-    target: {
-      durationS: (dureeMin + dureeMax) / 2,
-      minDurationS: dureeMin,
-      maxDurationS: dureeMax,
-      wordsPerSecond: rate.data.format_video.debit_voix_mots_par_s,
-    },
+    target: { durationS: (dureeMin + dureeMax) / 2, minDurationS: dureeMin, maxDurationS: dureeMax, wordsPerSecond: debitVoix },
   };
 }
 

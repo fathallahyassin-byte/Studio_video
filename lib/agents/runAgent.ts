@@ -183,7 +183,7 @@ async function judge<TInput, TSchema extends z.ZodType>(
   durationMs: number,
 ): Promise<Verdict<z.infer<TSchema>>> {
   try {
-    return await evaluate(request.definition, request.input, response.text);
+    return await evaluate(request.definition, request.input, prepared.ctx, response.text);
   } catch (error) {
     await recordFailure(request, deps, prepared, attempt, { durationMs, rawOutput: response.text, error, response });
     throw error;
@@ -193,6 +193,7 @@ async function judge<TInput, TSchema extends z.ZodType>(
 async function evaluate<TInput, TSchema extends z.ZodType>(
   definition: AgentDefinition<TInput, TSchema>,
   input: TInput,
+  ctx: AgentContext,
   text: string,
 ): Promise<Verdict<z.infer<TSchema>>> {
   const extracted = extractJson(text);
@@ -201,8 +202,8 @@ async function evaluate<TInput, TSchema extends z.ZodType>(
   if (!parsed.success) {
     return { status: "INVALID_JSON", error: `La sortie ne respecte pas le schéma :\n${formatZodIssues(parsed.error)}` };
   }
-  const output = definition.normalize ? definition.normalize(parsed.data, input) : parsed.data;
-  const failures = (definition.controls ? await definition.controls(output, input) : []).filter(isFailure);
+  const output = definition.normalize ? await definition.normalize(parsed.data, input, ctx) : parsed.data;
+  const failures = (definition.controls ? await definition.controls(output, input, ctx) : []).filter(isFailure);
   if (failures.length > 0) {
     return { status: "CONTROL_FAILED", error: `Contrôles refusés :\n${failures.map((failure) => `- ${failure.reason}`).join("\n")}` };
   }

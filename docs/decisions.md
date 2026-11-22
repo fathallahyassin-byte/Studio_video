@@ -2,6 +2,14 @@
 
 Une entrée par décision, la plus récente en haut.
 
+## 2026-11-22 — Besoins du fork de l'agent 4 (scénariste)
+- Contexte : `agents/04-scenariste/NEEDS.md`. Le scénariste recompte les mots avec le débit de la bible, mais `normalize` ne recevait pas la bible.
+- Décision :
+  - Contrat `AgentDefinition` : `normalize(sortie, input, ctx)` et `controls(sortie, input, ctx)` reçoivent le contexte de l'appel (même bible que celle du prompt), et `normalize` peut être asynchrone. Les définitions existantes restent compatibles (paramètre en plus).
+  - `checkBible` renvoie `debitVoix` (`format_video.debit_voix_mots_par_s`), modifiable dans le formulaire de la bible (pas de 0,1).
+  - Détail V2 de « À valider » : mêmes briques que le panneau du scénariste (`agents/04-scenariste/ui/ScriptParts.tsx`) : compteurs recalculés et écart avec la cible de la bible active, 3 accroches, frise minutée, beats avec ids de faits cliquables qui affichent le fait du dossier et sa source.
+- Alternatives écartées : garder l'état entre `buildVariables` et `normalize` dans la définition (le veilleur le fait encore ; il pourra passer à `ctx`) ; une seconde lecture du YAML dans l'agent pour le débit.
+
 ## 2026-11-22 — Fournisseur LLM : Claude (Anthropic)
 - Contexte : choix du propriétaire. Les agents passent par l'interface `LlmProvider` (CLAUDE.md §2).
 - Décision : `lib/providers/anthropic.ts`, SDK officiel `@anthropic-ai/sdk` (1.12). Activé par `LLM_PROVIDER="anthropic"`, clé `ANTHROPIC_API_KEY` (ou un profil `ant auth login`). Modèle par agent, en base ; `LLM_DEFAULT_MODEL="claude-opus-5-5"` remplit les agents sans modèle au seed.

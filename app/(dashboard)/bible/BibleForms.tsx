@@ -5,11 +5,14 @@ import { useKeptForm } from "@/components/useKeptForm";
 import type { BibleFields } from "@/lib/bible/bible";
 import { saveBibleFields, saveBibleYaml, type BibleFormState } from "./actions";
 
-function TextField({ id, label, defaultValue, type = "text" }: { id: keyof BibleFields; label: string; defaultValue: string | number; type?: "text" | "number" }) {
+type TextFieldProps = { id: keyof BibleFields; label: string; defaultValue: string | number; type?: "text" | "number"; min?: number; step?: number };
+
+function TextField({ id, label, defaultValue, type = "text", min = 1, step = 1 }: TextFieldProps) {
+  const numberProps = type === "number" ? { min, step } : {};
   return (
     <div className="flex flex-col gap-1.5">
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <input id={id} name={id} type={type} min={type === "number" ? 1 : undefined} defaultValue={defaultValue} required={id !== "cta"} className={fieldClass} />
+      <input id={id} name={id} type={type} {...numberProps} defaultValue={defaultValue} required={id !== "cta"} className={fieldClass} />
     </div>
   );
 }
@@ -35,6 +38,7 @@ export function BibleFieldsForm({ baseVersionId, fields }: { baseVersionId: stri
           <TextField id="dureeMin" label="Durée minimale (s)" defaultValue={fields.dureeMin} type="number" />
           <TextField id="dureeMax" label="Durée maximale (s)" defaultValue={fields.dureeMax} type="number" />
         </div>
+        <TextField id="debitVoix" label="Débit de la voix (mots par seconde)" defaultValue={fields.debitVoix} type="number" min={0.1} step={0.1} />
         <TextField id="voix" label="Voix" defaultValue={fields.voix} />
         <TextField id="cta" label="Appel à l'action" defaultValue={fields.cta} />
         <div className="flex flex-col gap-1.5">

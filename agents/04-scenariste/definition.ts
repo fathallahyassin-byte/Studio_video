@@ -1,5 +1,5 @@
 import { getAgentMeta } from "@/agents/_shared/catalog";
-import type { AgentDefinition, AgentJobInput } from "@/agents/_shared/types";
+import type { AgentContext, AgentDefinition, AgentJobInput } from "@/agents/_shared/types";
 import { AgentPreconditionError } from "@/lib/agents/errors";
 import { createPrismaScriptPorts, PUBLISHED_SCRIPTS_LIMIT, type ScriptPorts, type ScriptVideo } from "./ports";
 import { checkScript, normalizeScript, type ScriptContext } from "./rules";
@@ -24,22 +24,7 @@ const meta = getAgentMeta(4);
 
 export type ScriptDefinition = AgentDefinition<AgentJobInput, typeof outputSchema>;
 
-/**
- * Cible (bible) et faits (dossier) lus par buildVariables, réutilisés par normalize et controls.
- * normalize ne reçoit pas le contexte de l'appel : on rattache ces valeurs à l'objet `input`, le même
- * pour toutes les étapes d'une exécution de runAgent. Le contrôle porte ainsi exactement sur ce qui a été
- * donné au modèle, et la WeakMap ne retient rien une fois l'exécution terminée (voir NEEDS.md).
- */
-type JobContexts = WeakMap<AgentJobInput, ScriptContext>;
-
 export function createScriptDefinition(getPorts: () => ScriptPorts): ScriptDefinition {
-  const contexts: JobContexts = new WeakMap();
-  const contextOf = (input: AgentJobInput): ScriptContext => {
-    const context = contexts.get(input);
-    if (!context) throw new Error("Scénariste : normalize ou controls appelé avant buildVariables pour cette tâche.");
-    return context;
-  };
-
   return {
     id: meta.id,
     slug: meta.slug,
@@ -51,7 +36,6 @@ export function createScriptDefinition(getPorts: () => ScriptPorts): ScriptDefin
       const video = await loadScriptableVideo(ports, requireVideoId(input));
       const dossier = readDossier(video.dossier);
       const target = readScriptTarget(ctx.bible);
-      contexts.set(input, { target, facts: indexFacts(dossier), ideaId: readIdeaId(video.idea) });
       const [report, publishedScripts] = await Promise.all([
         ports.loadLatestReport(input.channelId),
         ports.loadPublishedScripts(input.channelId, PUBLISHED_SCRIPTS_LIMIT),
@@ -64,12 +48,12 @@ export function createScriptDefinition(getPorts: () => ScriptPorts): ScriptDefin
         DUREE_S: formatDuration(target.durationS),
       };
     },
-    normalize(output, input) {
-      const { target, facts } = contextOf(input);
+    async normalize(output, input, ctx) {
+      const { target, facts } = await loadScriptContext(getPorts(), input, ctx);
       return normalizeScript(output, target, facts);
     },
-    controls(output, input) {
-      return checkScript(output, contextOf(input));
+    async controls(output, input, ctx) {
+      return checkScript(output, await loadScriptContext(getPorts(), input, ctx));
     },
     async onSuccess(output, input) {
       await recordScript(getPorts(), requireVideoId(input), output);
@@ -87,6 +71,12 @@ async function loadScriptableVideo(ports: ScriptPorts, videoId: string): Promise
   if (!video) throw new AgentPreconditionError(`Vidéo ${videoId} introuvable.`);
   if (video.idea === null) throw new AgentPreconditionError("La vidéo n'a pas d'idée (ideaJson vide) : rien à scénariser.");
   return video;
+}
+
+/** Cible (bible de l'appel) et faits (dossier de la vidéo) : les mêmes que ceux donnés au modèle. */
+async function loadScriptContext(ports: ScriptPorts, input: AgentJobInput, ctx: AgentContext): Promise<ScriptContext> {
+  const video = await loadScriptableVideo(ports, requireVideoId(input));
+  return { target: readScriptTarget(ctx.bible), facts: indexFacts(readDossier(video.dossier)), ideaId: readIdeaId(video.idea) };
 }
 
 /**

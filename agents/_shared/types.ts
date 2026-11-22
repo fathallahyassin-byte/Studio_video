@@ -25,10 +25,13 @@ export type AgentDefinition<TInput, TSchema extends z.ZodType> = {
   outputSchema: TSchema;
   /** construit la valeur de chaque {{VARIABLE}} du prompt, sauf BIBLE (injectée par runAgent) */
   buildVariables(input: TInput, ctx: AgentContext): Promise<Record<string, string>>;
-  /** recalculs faits en code après Zod (scores, confiances forcées…) ; la sortie normalisée est celle enregistrée */
-  normalize?(output: z.infer<TSchema>, input: TInput): z.infer<TSchema>;
+  /**
+   * recalculs faits en code après Zod (scores, confiances forcées…) ; la sortie normalisée est celle enregistrée.
+   * `ctx` est celui de l'appel : même bible que celle injectée dans le prompt.
+   */
+  normalize?(output: z.infer<TSchema>, input: TInput, ctx: AgentContext): z.infer<TSchema> | Promise<z.infer<TSchema>>;
   /** contrôles faits en code après normalize ; un échec compte comme une tentative */
-  controls?(output: z.infer<TSchema>, input: TInput): ControlResult[] | Promise<ControlResult[]>;
+  controls?(output: z.infer<TSchema>, input: TInput, ctx: AgentContext): ControlResult[] | Promise<ControlResult[]>;
   /**
    * appelé une fois la sortie acceptée : enregistrement, transition d'étape, notifications.
    * Doit être idempotent : après un redémarrage du worker, il peut être rappelé avec la même sortie.
