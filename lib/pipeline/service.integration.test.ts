@@ -98,6 +98,21 @@ describe.skipIf(!url)("pipeline sur base réelle", () => {
     expect((await jobsOf(video.id)).map((job) => job.agentId)).toEqual([5, 6, 7]);
   });
 
+  it("revenir en VISUALS_AND_AUDIO efface l'ancien storyboard et l'ancien plan sonore : MEDIA_DONE attend les nouveaux", async () => {
+    const video = await videoAt("AWAITING_V3", { storyboard: true, audio: true });
+    await applyEvent(deps, { videoId: video.id, event: "V3_CHANGES_REQUESTED", actor: human, note: "plans trop sombres", returnTo: "VISUALS_AND_AUDIO" });
+    expect(await db.video.findUniqueOrThrow({ where: { id: video.id } })).toMatchObject({ stage: "VISUALS_AND_AUDIO", storyboardJson: null, audioJson: null });
+
+    await db.video.update({ where: { id: video.id }, data: { audioJson: { texte_tts: "nouveau" } } });
+    expect(await completeStage(deps, { videoId: video.id, event: "MEDIA_DONE", actor: { kind: "agent", agentId: 6 } })).toEqual({ waiting: true });
+
+    await db.video.update({ where: { id: video.id }, data: { storyboardJson: { plans: [] } } });
+    await blockVideo(deps, { videoId: video.id, reason: "budget", actor: { kind: "agent", agentId: 5 } });
+    expect(await db.video.findUniqueOrThrow({ where: { id: video.id } })).toMatchObject({ stage: "NEEDS_FIX", storyboardJson: { plans: [] } });
+    await resumeVideo(deps, { videoId: video.id, actor: human });
+    expect(await db.video.findUniqueOrThrow({ where: { id: video.id } })).toMatchObject({ stage: "VISUALS_AND_AUDIO", storyboardJson: null, audioJson: null });
+  });
+
   it("V3 : le GO programme la vidéo et lance l'agent publication ; la publication devient possible", async () => {
     const video = await videoAt("AWAITING_V3");
     await applyEvent(deps, { videoId: video.id, event: "V3_APPROVED", actor: human });

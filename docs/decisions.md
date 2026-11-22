@@ -2,6 +2,15 @@
 
 Une entrée par décision, la plus récente en haut.
 
+## 2026-11-22 — Besoins du fork de l'agent 5 (directeur artistique)
+- Contexte : `agents/05-directeur-artistique/NEEDS.md`. Médias générés sans clé d'idempotence en base ; storyboard et plan sonore du passage précédent encore présents quand la vidéo revient en `VISUALS_AND_AUDIO` ; labels IA des plans invisibles avant le GO.
+- Décision :
+  - `Asset.generationKey` (texte, unique ; migration `20261122180000_asset_generation_key`). Clé = `vidéo:plan:tentative:empreinte SHA-256 de la requête`. `createPrismaMediaPorts` (agent 5) enregistre l'`Asset` et ajoute le coût à `Video.totalCost` dans une même transaction ; une clé déjà prise (reprise, deux workers) n'ajoute ni Asset ni coût.
+  - En entrant dans `VISUALS_AND_AUDIO` (V2 approuvée, reprise, renvoi V3), `applyEvent` remet `storyboardJson` et `audioJson` à `null` dans la transaction du changement d'étape : `MEDIA_DONE` attend les livrables de ce passage. L'ancien storyboard reste dans les `AgentRun` : l'agent 5 y lit le dernier accepté pour corriger d'après la note de l'humain.
+  - Détail V3 de « À valider » : résumé des plans de l'agent 5 (type, temps, état du média, label IA), sous le rapport du contrôle qualité.
+  - Pas encore faits, en attente du propriétaire : fournisseurs d'images et de vidéo IA (payants), stockage S3 des médias, source des séquences « stock ».
+- Alternatives écartées : comparer dans `completeStage` la date d'écriture des JSON à celle de la transition (deux colonnes de plus, à tenir à jour par chaque agent) ; vider seulement au renvoi V3 (une reprise après blocage garde aussi un livrable périmé).
+
 ## 2026-11-22 — Besoins du fork de l'agent 4 (scénariste)
 - Contexte : `agents/04-scenariste/NEEDS.md`. Le scénariste recompte les mots avec le débit de la bible, mais `normalize` ne recevait pas la bible.
 - Décision :

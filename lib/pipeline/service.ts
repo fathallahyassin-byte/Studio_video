@@ -61,7 +61,7 @@ export async function applyEvent(deps: PipelineDeps, input: ApplyEventInput, opt
 
     const updated = await tx.video.updateMany({
       where: { id: video.id, stage: video.stage },
-      data: { stage: result.to, blockedAt: result.blockedAt, blockedReason: result.to === "NEEDS_FIX" ? note : null },
+      data: { stage: result.to, blockedAt: result.blockedAt, blockedReason: result.to === "NEEDS_FIX" ? note : null, ...staleDeliverables(result.to) },
     });
     if (updated.count !== 1) throw new TransitionError("La vidéo a changé d'étape entre-temps : recharge la page.");
 
@@ -75,6 +75,14 @@ export async function applyEvent(deps: PipelineDeps, input: ApplyEventInput, opt
 
   if (options.notify !== false) await notifyHumanStage(deps.notifier, applied, note);
   return applied;
+}
+
+/**
+ * En entrant dans VISUALS_AND_AUDIO (V2, reprise, renvoi V3), les livrables du passage précédent sont effacés :
+ * sinon MEDIA_DONE avancerait avec l'ancien storyboard ou l'ancien plan sonore. Ils restent dans les AgentRun.
+ */
+function staleDeliverables(to: Stage): Pick<Prisma.VideoUpdateManyMutationInput, "storyboardJson" | "audioJson"> {
+  return to === "VISUALS_AND_AUDIO" ? { storyboardJson: Prisma.DbNull, audioJson: Prisma.DbNull } : {};
 }
 
 /** Les tâches encore en file d'une étape quittée ne doivent plus tourner. */
