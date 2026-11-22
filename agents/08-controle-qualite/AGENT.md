@@ -49,10 +49,21 @@ La page générique (en-tête, modèle, éditeur de prompt, historique des Agent
 
 ## Critères d'acceptation
 
-- [ ] `definition.ts` exporte une `AgentDefinition` conforme à `agents/_shared/types.ts`.
-- [ ] La sortie est validée par `schema.ts`, avec 2 relances maximum, puis `NEEDS_FIX`.
-- [ ] Chaque appel crée un AgentRun (prompt, bible, entrée, sortie, tokens, coût).
-- [ ] La règle de décision est **recalculée en code** à partir des contrôles. En cas de désaccord avec le modèle, la version la plus stricte l'emporte.
-- [ ] Les étiquettes sont copiées dans les Publications.
-- [ ] Tests Vitest : un exemple de sortie valide, un invalide, et les contrôles en code ci-dessus.
-- [ ] `ui/Panel.tsx` suit la maquette (police Archivo, noir, fond #F6F7F4, jaune #FFD60A réservé à ce qui attend une action).
+- [x] `definition.ts` exporte une `AgentDefinition` conforme à `agents/_shared/types.ts`.
+- [x] La sortie est validée par `schema.ts`, avec 2 relances maximum, puis `NEEDS_FIX`.
+- [x] Chaque appel crée un AgentRun (prompt, bible, entrée, sortie, tokens, coût).
+- [x] La règle de décision est **recalculée en code** à partir des contrôles. En cas de désaccord avec le modèle, la version la plus stricte l'emporte.
+- [x] Les étiquettes sont copiées dans les Publications. Côté agent 8 : enregistrées dans `qaJson` et converties par `labels.ts` (`readPublicationLabels`) dans la forme de `Publication.aiLabel` / `brandedContent`. Le branchement à la création des `Publication` revient à l'agent 9 (`NEEDS.md`, point 2).
+- [x] Tests Vitest : un exemple de sortie valide, un invalide, et les contrôles en code ci-dessus.
+- [x] `ui/Panel.tsx` suit la maquette (police Archivo, noir, fond #F6F7F4, jaune #FFD60A réservé à ce qui attend une action).
+
+## Fichiers du fork
+
+| Fichier | Rôle |
+| --- | --- |
+| `checklist.ts` | les 16 points, la règle de décision, les sources dont chaque point a besoin, l'agent responsable |
+| `rules.ts` | `normalizeReport` (recalculs) et `checkReport` (refus renvoyés au modèle), fonctions pures |
+| `variables.ts` | lecture des sources et texte des 10 variables ; « NON DISPONIBLE » pour une source absente |
+| `ports.ts` | accès à la base et au pipeline, injectables (faux dans les tests) |
+| `labels.ts` | étiquettes du rapport dans la forme des colonnes de `Publication` |
+| `ui/` | `Panel.tsx` (serveur), `loadReports.ts`, modèle de vue `reports.ts`, `ReportBrowser.tsx` (client) |
