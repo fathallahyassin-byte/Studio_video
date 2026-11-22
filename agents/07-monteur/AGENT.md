@@ -47,10 +47,10 @@ La page générique (en-tête, modèle, éditeur de prompt, historique des Agent
 
 ## Critères d'acceptation
 
-- [ ] `definition.ts` exporte une `AgentDefinition` conforme à `agents/_shared/types.ts`.
-- [ ] La sortie est validée par `schema.ts`, avec 2 relances maximum, puis `NEEDS_FIX`.
-- [ ] Chaque appel crée un AgentRun (prompt, bible, entrée, sortie, tokens, coût).
-- [ ] Les sous-titres sont recalés **en code** à partir de l'horodatage. L'agent ne choisit que le rythme et les transitions.
-- [ ] Le rendu fait 1080×1920 à 30 images/s et finit au plus 0,5 s après le dernier mot.
-- [ ] Tests Vitest : un exemple de sortie valide, un invalide, et les contrôles en code ci-dessus.
-- [ ] `ui/Panel.tsx` suit la maquette (police Archivo, noir, fond #F6F7F4, jaune #FFD60A réservé à ce qui attend une action).
+- [x] `definition.ts` exporte une `AgentDefinition` conforme à `agents/_shared/types.ts`.
+- [x] La sortie est validée par `schema.ts`, avec 2 relances maximum, puis `NEEDS_FIX` (`definition.test.ts`).
+- [x] Chaque appel crée un AgentRun (prompt, bible, entrée, sortie, tokens, coût) (`definition.test.ts`).
+- [x] Les sous-titres sont recalés **en code** à partir de l'horodatage (`subtitles.ts`). L'agent ne choisit que le rythme et les transitions : durée, format, sous-titres, pistes audio et fichiers des plans sont imposés par `normalize` (`rules.ts`).
+- [x] Le rendu fait 1080×1920 à 30 images/s et finit au plus 0,5 s après le dernier mot. *Couvert côté timeline* : `normalize` impose l'export et la durée (sur une image entière, entre la fin du dernier mot et 0,5 s après), `controls` le vérifie. Le rendu Remotion lui-même n'est pas branché (étape 6) : la composition doit reprendre ces valeurs telles quelles (`NEEDS.md` § 1).
+- [x] Tests Vitest : un exemple de sortie valide, un invalide, et les contrôles en code ci-dessus (`*.test.ts`, `ui/timelines.test.ts`).
+- [x] `ui/Panel.tsx` suit la maquette (police Archivo, noir, fond #F6F7F4, jaune #FFD60A réservé à ce qui attend une action). Le Remotion Player est remplacé par une prévisualisation statique (image à l'instant choisi) tant que Remotion n'est pas installé (`NEEDS.md` § 2) ; « Lancer le rendu » est désactivé avec une note.
