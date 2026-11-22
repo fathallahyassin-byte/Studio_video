@@ -59,14 +59,9 @@ export type Counters = {
   withinTolerance: boolean | null;
 };
 
-export type ScriptView = {
-  videoId: string;
-  label: string;
-  title: string;
+/** Contenu d'un script prêt à afficher : panneau de l'agent et détail V2 de « À valider ». */
+export type ScriptContent = {
   titreInterne: string;
-  updatedLabel: string;
-  status: V2Status;
-  correctionNote: string | null;
   hooks: HookView[];
   beats: BeatView[];
   totalS: number;
@@ -74,6 +69,15 @@ export type ScriptView = {
   cta: string | null;
   /** faits du dossier, par id ; vide si le dossier est illisible */
   facts: Record<string, FactView>;
+};
+
+export type ScriptView = ScriptContent & {
+  videoId: string;
+  label: string;
+  title: string;
+  updatedLabel: string;
+  status: V2Status;
+  correctionNote: string | null;
 };
 
 export const roleLabels: Record<Role, string> = {
@@ -176,25 +180,32 @@ function toFactViews(dossierJson: unknown): Record<string, FactView> {
 }
 
 /** null si le script enregistré est illisible (schéma changé, donnée abîmée). */
-export function toScriptView(row: ScriptRow, target: ScriptTarget | null): ScriptView | null {
-  const script = parseStoredScript(row.scriptJson);
+export function toScriptContent(scriptJson: unknown, dossierJson: unknown, target: ScriptTarget | null): ScriptContent | null {
+  const script = parseStoredScript(scriptJson);
   if (!script) return null;
-  const status = describeV2Status(row);
   const { beats, totalS } = toBeatViews(script.beats);
   return {
-    videoId: row.id,
-    label: row.label,
-    title: row.title,
     titreInterne: script.titre_interne,
-    updatedLabel: row.updatedLabel,
-    status,
-    correctionNote: row.lastV2Decision === "CHANGES_REQUESTED" ? row.lastV2Note?.trim() || null : null,
     hooks: script.accroches.map((hook, index) => ({ type: hookTypeLabels[hook.type], voix: hook.voix, texteEcran: hook.texte_ecran, recommended: index === 0 })),
     beats,
     totalS,
     counters: computeCounters(script, target),
     cta: script.cta?.trim() || null,
-    facts: toFactViews(row.dossierJson),
+    facts: toFactViews(dossierJson),
+  };
+}
+
+export function toScriptView(row: ScriptRow, target: ScriptTarget | null): ScriptView | null {
+  const content = toScriptContent(row.scriptJson, row.dossierJson, target);
+  if (!content) return null;
+  return {
+    ...content,
+    videoId: row.id,
+    label: row.label,
+    title: row.title,
+    updatedLabel: row.updatedLabel,
+    status: describeV2Status(row),
+    correctionNote: row.lastV2Decision === "CHANGES_REQUESTED" ? row.lastV2Note?.trim() || null : null,
   };
 }
 

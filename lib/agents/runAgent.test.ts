@@ -152,6 +152,24 @@ describe("runAgent", () => {
     expect(llm.requests[1]?.messages[2]?.content).toContain("score au-dessus de 5");
   });
 
+  it("donne à normalize (éventuellement asynchrone) et à controls le contexte de l'appel", async () => {
+    const seen: string[] = [];
+    const { definition } = makeDefinition({
+      async normalize(output, _input, ctx) {
+        seen.push(`normalize:${ctx.bible}:${ctx.bibleVersionId}`);
+        return { ...output, titre: output.titre.toUpperCase() };
+      },
+      controls(output, _input, ctx) {
+        seen.push(`controls:${ctx.videoId}`);
+        return [output.titre === output.titre.toUpperCase() ? { ok: true } : { ok: false, reason: "normalize non attendu" }];
+      },
+    });
+    const { deps } = setup([VALID]);
+
+    await expect(runAgent(request(definition), deps)).resolves.toMatchObject({ status: "ok", output: { titre: "LE TROMBONE" } });
+    expect(seen).toEqual(["normalize:niche: objets du quotidien:bible-3", "controls:video-1"]);
+  });
+
   it("passe la vidéo en NEEDS_FIX et alerte après 3 échecs", async () => {
     const { definition, onSuccess } = makeDefinition();
     const { store, notifier, deps } = setup(["a", "b", "c"]);

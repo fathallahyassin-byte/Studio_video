@@ -7,22 +7,15 @@ import { stageLabels } from "@/lib/pipeline/machine";
 import { ScoutForm } from "../production/ProductionActions";
 import { FixForm, IdeasDecisionForm, VideoDecisionForm } from "./DecisionForms";
 import { doneMessage } from "./messages";
-import { formatRelative, formatTimeRange, formatVideoNumber } from "@/lib/dashboard/format";
-import type { QaReport, Script } from "@/lib/dashboard/payloads";
+import { formatRelative, formatVideoNumber } from "@/lib/dashboard/format";
+import type { QaReport } from "@/lib/dashboard/payloads";
+import { ScriptReview } from "@/agents/04-scenariste/ui/ScriptParts";
 import { qaCheckLabel, qaDecisionLabels, qaStatusLabels } from "@/lib/dashboard/qaChecklist";
 import { getQueueDetail, getValidationData, type IdeaRow, type QueueDetail } from "@/lib/dashboard/queries";
 import { selectQueueItem } from "@/lib/dashboard/queue";
 import { getDb } from "@/lib/db";
 
 export const metadata: Metadata = { title: "À valider · Studio" };
-
-const roleLabels: Record<Script["beats"][number]["role"], string> = {
-  accroche: "Accroche",
-  contexte: "Contexte",
-  revelation: "Révélation",
-  chute: "Chute",
-  boucle: "Boucle",
-};
 
 function Unreadable() {
   return <p className="rounded-xl bg-paper p-4 text-sm text-muted">Le livrable de l&apos;agent est illisible ou absent : relance l&apos;agent depuis sa page.</p>;
@@ -49,46 +42,6 @@ function IdeasDetail({ ideas }: { ideas: IdeaRow[] }) {
         ))}
       </ul>
     </fieldset>
-  );
-}
-
-function ScriptDetail({ script }: { script: Script }) {
-  return (
-    <div className="flex flex-col gap-5">
-      <div>
-        <h3 className="mb-2 text-[13px] font-bold text-ink">Accroches proposées</h3>
-        <ol className="grid grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))] gap-2">
-          {script.accroches.map((hook, index) => (
-            <li key={hook.type} className="rounded-xl bg-paper p-3 text-sm">
-              <span className="block text-xs font-bold text-muted">
-                {index === 0 ? "Recommandée · " : ""}
-                {hook.type}
-              </span>
-              <span className="block text-ink">{hook.voix}</span>
-            </li>
-          ))}
-        </ol>
-      </div>
-      <div>
-        <h3 className="mb-2 text-[13px] font-bold text-ink">
-          Beats minutés · {script.nb_mots} mots, {Math.round(script.duree_estimee_s)} s
-        </h3>
-        <ol className="flex flex-col gap-2.5">
-          {script.beats.map((beat) => (
-            <li key={beat.n} className="flex gap-3.5 rounded-xl bg-paper px-3.5 py-3">
-              <span className="w-16 shrink-0 text-[13px] font-bold text-muted tabular-nums">{formatTimeRange(beat.debut_s, beat.fin_s)}</span>
-              <span className="flex-1">
-                <span className="block text-xs font-bold text-muted">
-                  {roleLabels[beat.role]}
-                  {beat.faits.length > 0 ? ` · ${beat.faits.join(", ")}` : ""}
-                </span>
-                <span className="block text-ink">{beat.voix}</span>
-              </span>
-            </li>
-          ))}
-        </ol>
-      </div>
-    </div>
   );
 }
 
@@ -160,7 +113,7 @@ function DetailBody({ detail }: { detail: QueueDetail }) {
     case "script":
       return (
         <>
-          {detail.script ? <ScriptDetail script={detail.script} /> : <Unreadable />}
+          {detail.review ? <ScriptReview content={detail.review} headingLevel="h3" /> : <Unreadable />}
           <VideoDecisionForm videoId={detail.videoId} gate="V2" />
         </>
       );

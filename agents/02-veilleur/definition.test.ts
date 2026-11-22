@@ -121,7 +121,8 @@ describe("veilleur : définition", () => {
 
   it("refuse normalize sans buildVariables : le contexte de la veille manque", () => {
     const { definition } = setup([]);
-    expect(() => definition.normalize?.(makeOutput(), INPUT)).toThrow(/Contexte de veille absent/);
+    const ctx = { channelId: "chaine-1", videoId: null, bible: BIBLE, bibleVersionId: "bible-1" };
+    expect(() => definition.normalize?.(makeOutput(), INPUT, ctx)).toThrow(/Contexte de veille absent/);
   });
 });
 

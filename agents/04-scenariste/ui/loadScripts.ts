@@ -15,7 +15,8 @@ export type ScriptOverview = {
   target: ScriptTarget | null;
 };
 
-async function loadTarget(db: PrismaClient, activeBibleVersionId: string | null): Promise<ScriptTarget | null> {
+/** Cible de la bible active ; null si elle manque ou ne donne pas de durée cible. */
+export async function loadScriptTarget(db: PrismaClient, activeBibleVersionId: string | null): Promise<ScriptTarget | null> {
   if (!activeBibleVersionId) return null;
   const bible = await db.bibleVersion.findUnique({ where: { id: activeBibleVersionId }, select: { content: true } });
   if (!bible) return null;
@@ -43,7 +44,7 @@ export async function loadScriptOverview(db: PrismaClient, channel: { id: string
       },
     }),
     db.video.count({ where: { channelId: channel.id, stage: "SCRIPT", scriptJson: { equals: Prisma.DbNull } } }),
-    loadTarget(db, channel.activeBibleVersionId),
+    loadScriptTarget(db, channel.activeBibleVersionId),
   ]);
   const views = videos.map((video) =>
     toScriptView(
