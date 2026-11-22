@@ -44,10 +44,29 @@ La page générique (en-tête, modèle, éditeur de prompt, historique des Agent
 
 ## Critères d'acceptation
 
-- [ ] `definition.ts` exporte une `AgentDefinition` conforme à `agents/_shared/types.ts`.
-- [ ] La sortie est validée par `schema.ts`, avec 2 relances maximum, puis `NEEDS_FIX`.
-- [ ] Chaque appel crée un AgentRun (prompt, bible, entrée, sortie, tokens, coût).
-- [ ] Le score est recalculé en code (moyenne des 5 notes, +0,5 / −1).
-- [ ] Une idée trop proche d'un titre existant est signalée (similarité simple sur les titres).
-- [ ] Tests Vitest : un exemple de sortie valide, un invalide, et les contrôles en code ci-dessus.
-- [ ] `ui/Panel.tsx` suit la maquette (police Archivo, noir, fond #F6F7F4, jaune #FFD60A réservé à ce qui attend une action).
+- [x] `definition.ts` exporte une `AgentDefinition` conforme à `agents/_shared/types.ts`.
+- [x] La sortie est validée par `schema.ts`, avec 2 relances maximum, puis `NEEDS_FIX`.
+- [x] Chaque appel crée un AgentRun (prompt, bible, entrée, sortie, tokens, coût).
+- [x] Le score est recalculé en code (moyenne des 5 notes, +0,5 / −1).
+- [x] Une idée trop proche d'un titre existant est signalée (similarité simple sur les titres).
+- [x] Tests Vitest : un exemple de sortie valide, un invalide, et les contrôles en code ci-dessus.
+- [x] `ui/Panel.tsx` suit la maquette (police Archivo, noir, fond #F6F7F4, jaune #FFD60A réservé à ce qui attend une action).
+
+## Implémentation (fork)
+
+| Fichier | Contenu |
+| --- | --- |
+| `definition.ts` | `createScoutDefinition(store, horloge)` et `definition` (branchée sur PostgreSQL) |
+| `variables.ts` | texte de `{{SIGNAUX}}`, `{{APPRENTISSAGES}}`, `{{BACKLOG_EXISTANT}}` (jamais vide : « aucun… ») |
+| `rules.ts` | `normalize` et `controls`, en fonctions pures |
+| `similarity.ts` | similarité des titres (mots significatifs communs, coefficient de Dice, seuil 0,6) |
+| `proposals.ts` | `onSuccess` : une Video par idée via `proposeIdeas`, idempotent |
+| `prismaStore.ts` | accès à la base du veilleur |
+| `settings.ts` | signaux de la semaine dans `Agent.settings` |
+| `ui/` | panneau, formulaires et Server Actions (`requireOwner()`) |
+
+- **Score** : moyenne des 5 notes, arrondie au dixième. Le +0,5 n'est pas visible dans la sortie : il est déduit de l'écart entre le score du modèle et la moyenne, et accordé seulement si l'analyste a donné au moins un enseignement. Le −1 s'applique si le modèle l'a appliqué ou si le code trouve un titre proche parmi les vidéos des 90 derniers jours.
+- **Autres recalculs** : `semaine` fixée par le code (le prompt ne donne pas la date) ; sans signaux, toutes les idées passent en `hypothese: true` ; tri par score décroissant.
+- **Refus en code** : identifiants en double, pilier au-dessus de 40 %, pilier absent de la bible (quand elle en donne), autre chose que 3 séries, deux idées qui donneraient la même vidéo (similarité ≥ 0,75), sujet interdit de la bible cité mot pour mot.
+- **Signal « trop proche »** : `ideaJson.proche_de` (titre existant ou `null`), affiché sur le panneau. `ideaJson.veille` (`semaine`, `jobId`) sert à rejouer `onSuccess` sans doublon.
+- **Échec** : la veille n'a pas de vidéo ; après 3 échecs, `runAgent` alerte l'humain avec un lien vers cette page.
