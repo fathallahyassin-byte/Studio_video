@@ -10,7 +10,11 @@ export function getDb(): PrismaClient {
   if (!globalThis.studioPrisma) {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) throw new Error("DATABASE_URL manquant : copie .env.example dans .env.local.");
-    globalThis.studioPrisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+    // `npx prisma dev` (Postgres embarqué) ne supporte qu'une connexion à la fois : DATABASE_POOL_MAX=1.
+    const max = Number(process.env.DATABASE_POOL_MAX ?? "");
+    globalThis.studioPrisma = new PrismaClient({
+      adapter: new PrismaPg({ connectionString, ...(Number.isInteger(max) && max > 0 ? { max } : {}) }),
+    });
   }
   return globalThis.studioPrisma;
 }

@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { buttonClass, Chip, FieldLabel, fieldClass, PageHeader, Panel, PendingNote } from "@/components/ui";
+import { Chip, PageHeader, Panel } from "@/components/ui";
 import { requireCurrentChannel } from "@/lib/dashboard/context";
+import type { Stage } from "@/lib/generated/prisma/client";
+import { stageLabels } from "@/lib/pipeline/machine";
+import { ScoutForm } from "../production/ProductionActions";
+import { FixForm, IdeasDecisionForm, VideoDecisionForm } from "./DecisionForms";
+import { doneMessage } from "./messages";
 import { formatRelative, formatTimeRange, formatVideoNumber } from "@/lib/dashboard/format";
 import type { QaReport, Script } from "@/lib/dashboard/payloads";
 import { qaCheckLabel, qaDecisionLabels, qaStatusLabels } from "@/lib/dashboard/qaChecklist";
@@ -131,16 +136,56 @@ function QaDetail({ report }: { report: QaReport }) {
   );
 }
 
-function DetailBody({ detail }: { detail: QueueDetail }) {
-  if (detail.kind === "ideas") return <IdeasDetail ideas={detail.ideas} />;
-  if (detail.kind === "script") return detail.script ? <ScriptDetail script={detail.script} /> : <Unreadable />;
-  return detail.report ? <QaDetail report={detail.report} /> : <Unreadable />;
+function FixDetail({ reason, blockedAt }: { reason: string | null; blockedAt: Stage | null }) {
+  return (
+    <div className="flex flex-col gap-2 rounded-xl bg-paper p-4 text-sm">
+      <p>
+        <span className="font-bold text-ink">Étape bloquée : </span>
+        {blockedAt ? stageLabels[blockedAt] : "inconnue"}
+      </p>
+      <p className="whitespace-pre-line text-text">{reason ?? "Aucune raison enregistrée."}</p>
+      <p className="text-muted">« Relancer l&apos;étape » remet la vidéo à cette étape et relance son agent, avec ta note.</p>
+    </div>
+  );
 }
 
-type ValidationsPageProps = { searchParams: Promise<{ item?: string | string[] }> };
+function DetailBody({ detail }: { detail: QueueDetail }) {
+  switch (detail.kind) {
+    case "ideas":
+      return (
+        <IdeasDecisionForm>
+          <IdeasDetail ideas={detail.ideas} />
+        </IdeasDecisionForm>
+      );
+    case "script":
+      return (
+        <>
+          {detail.script ? <ScriptDetail script={detail.script} /> : <Unreadable />}
+          <VideoDecisionForm videoId={detail.videoId} gate="V2" />
+        </>
+      );
+    case "qa":
+      return (
+        <>
+          {detail.report ? <QaDetail report={detail.report} /> : <Unreadable />}
+          <VideoDecisionForm videoId={detail.videoId} gate="V3" suggestedReturn={detail.suggestedReturn} />
+        </>
+      );
+    case "fix":
+      return (
+        <>
+          <FixDetail reason={detail.reason} blockedAt={detail.blockedAt} />
+          <FixForm videoId={detail.videoId} />
+        </>
+      );
+  }
+}
+
+type ValidationsPageProps = { searchParams: Promise<{ item?: string | string[]; fait?: string | string[] }> };
 
 export default async function ValidationsPage({ searchParams }: ValidationsPageProps) {
-  const { item: requested } = await searchParams;
+  const { item: requested, fait } = await searchParams;
+  const done = doneMessage(fait);
   const channel = await requireCurrentChannel();
   const db = getDb();
   const { queue } = await getValidationData(db, channel.id);
@@ -150,15 +195,20 @@ export default async function ValidationsPage({ searchParams }: ValidationsPageP
 
   return (
     <>
-      <PageHeader title="À valider" description="Les trois moments où l'équipe t'attend : V1 les idées, V2 le script, V3 le GO final." />
+      <PageHeader title="À valider" description="Les trois moments où l'équipe t'attend : V1 les idées, V2 le script, V3 le GO final. Et les vidéos bloquées à corriger." />
+      {done ? (
+        <p role="status" className="rounded-[14px] bg-ink px-4 py-3 font-semibold text-white">
+          {done}
+        </p>
+      ) : null}
 
       {!selected || !detail ? (
-        <Panel className="sm:p-10">
-          <p className="font-display text-[30px]">Rien à valider.</p>
-          <p className="mt-2 text-muted">L&apos;équipe produit. Lance la veille pour recevoir de nouvelles idées.</p>
-          <button type="button" className={`${buttonClass("ink")} mt-5`} disabled>
-            Lancer la veille de la semaine
-          </button>
+        <Panel className="flex flex-col items-start gap-5 sm:p-10">
+          <div>
+            <p className="font-display text-[30px]">Rien à valider.</p>
+            <p className="mt-2 text-muted">L&apos;équipe produit. Lance la veille pour recevoir de nouvelles idées.</p>
+          </div>
+          <ScoutForm />
         </Panel>
       ) : (
         <div className="flex flex-wrap items-start gap-5">
@@ -174,7 +224,7 @@ export default async function ValidationsPage({ searchParams }: ValidationsPageP
                     current ? "shadow-[inset_0_0_0_2px_#000,0_0_0_4px_var(--color-wait)]" : "shadow-[inset_0_0_0_1px_var(--color-line)] hover:shadow-[inset_0_0_0_2px_#000]"
                   }`}
                 >
-                  <Chip tone="wait">{item.gate}</Chip>
+                  <Chip tone="wait">{item.gateShort}</Chip>
                   <span className="leading-[1.3] font-bold text-ink">{item.title}</span>
                   <span className="text-[13px] text-muted">
                     {item.agentName}, {formatRelative(item.since, now)}
@@ -193,20 +243,7 @@ export default async function ValidationsPage({ searchParams }: ValidationsPageP
                 {selected.videoNumber !== null ? ` · ${formatVideoNumber(selected.videoNumber)}` : ""}
               </p>
             </div>
-            <DetailBody detail={detail} />
-            <div className="flex flex-col gap-1.5">
-              <FieldLabel htmlFor="note">Note pour l&apos;agent (facultatif)</FieldLabel>
-              <textarea id="note" name="note" className={`${fieldClass} min-h-24 resize-y`} placeholder="Ex. : accroche plus courte, éviter le mot « secret »" />
-            </div>
-            <div className="flex flex-wrap gap-2.5">
-              <button type="button" className={buttonClass("hi")} disabled>
-                Valider
-              </button>
-              <button type="button" className={buttonClass("ghost")} disabled>
-                Demander une correction
-              </button>
-            </div>
-            <PendingNote>Les décisions seront enregistrées à l&apos;étape 3, avec la machine à états.</PendingNote>
+            <DetailBody key={selected.key} detail={detail} />
           </Panel>
         </div>
       )}

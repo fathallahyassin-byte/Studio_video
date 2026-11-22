@@ -49,6 +49,11 @@ describe("file de validation", () => {
     expect(queue[0]).toMatchObject({ videoIds: ["i1", "i2"], since: at(30) });
   });
 
+  it("ajoute les vidéos à corriger après les validations", () => {
+    const queue = buildQueue([...videos, { id: "f1", number: 26, title: "Boutons", stage: "NEEDS_FIX" as const, updatedAt: at(5) }]);
+    expect(queue.at(-1)).toMatchObject({ key: "f1", gate: "FIX", gateShort: "Correction" });
+  });
+
   it("sélectionne l'entrée demandée, ou la première", () => {
     const queue = buildQueue(videos);
     expect(selectQueueItem(queue, "s2")?.key).toBe("s2");

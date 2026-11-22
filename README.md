@@ -9,15 +9,25 @@ Il faut Node 22.12 ou plus et Docker Desktop.
 ```bash
 npm install                 # installe et génère le client Prisma
 cp .env.example .env.local  # puis complète .env.local au besoin
-npm run db:up               # PostgreSQL + Redis (docker-compose.yml)
+npm run db:up               # PostgreSQL (docker-compose.yml)
 npm run db:migrate          # applique les migrations
 npm run db:seed             # chaîne par défaut, 11 agents, prompts
 npm run db:seed:demo        # facultatif : vidéos, bible et stats d'exemple (base vide uniquement)
 npm run auth:setup          # crée ton compte : e-mail, mot de passe, application d'authentification
 npm run dev                 # http://localhost:3000
+npm run worker              # dans un second terminal : exécute les tâches des agents
 ```
 
-Sans Docker, `npx prisma dev` lance un PostgreSQL local temporaire : copie l'URL `postgres://…` qu'il affiche dans `DATABASE_URL`. Redis manquera, mais il ne sert qu'à partir de l'étape 3.
+Le worker prend les tâches dans PostgreSQL (table `AgentJob`), relance celles qui échouent et planifie chaque lundi l'analyse (6 h) et la veille (7 h). Tant qu'aucun fournisseur LLM n'est configuré, il laisse les tâches d'agents en file. Ctrl+C l'arrête proprement.
+
+Sans Docker, `npx prisma dev` lance un PostgreSQL local temporaire : copie l'URL `postgres://…` qu'il affiche dans `DATABASE_URL` et ajoute `DATABASE_POOL_MAX="1"` (il ne supporte qu'une connexion à la fois).
+
+## Tester
+
+```bash
+npm run test       # tests unitaires ; + tests d'intégration si TEST_DATABASE_URL pointe vers une base migrée et seedée
+npm run test:e2e   # parcours V1 → V2 → V3 dans Edge ; E2E_DATABASE_URL = base JETABLE, vidée à chaque lancement
+```
 
 Pour effacer la démo et repartir d'une base vide : `npx prisma migrate reset`, puis `npm run db:seed`.
 

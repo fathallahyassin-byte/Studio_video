@@ -36,8 +36,21 @@ export type AgentDefinition<TInput, TSchema extends z.ZodType> = {
   onSuccess(output: z.infer<TSchema>, input: TInput, ctx: AgentContext): Promise<void>;
 };
 
-/** Type commun du registre. `never` oblige à importer la définition typée pour l'exécuter. */
-export type AnyAgentDefinition = AgentDefinition<never, z.ZodType>;
+/**
+ * Entrée de tout agent lancé par le worker (une ligne AgentJob). Le reste se lit en base
+ * depuis `videoId` (idée, dossier, script…) ; `payload` porte les entrées d'un formulaire (agent 1).
+ */
+export type AgentJobInput = {
+  jobId: string;
+  channelId: string;
+  videoId: string | null;
+  /** note de l'humain : correction V2 ou V3, reprise après blocage */
+  note: string | null;
+  payload: unknown;
+};
+
+/** Type commun du registre : chaque agent reçoit une AgentJobInput. */
+export type AnyAgentDefinition = AgentDefinition<AgentJobInput, z.ZodType>;
 
 export type AgentPanelProps = {
   agentId: AgentId;

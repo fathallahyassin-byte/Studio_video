@@ -1,18 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { buttonClass, Chip, PageHeader, PendingNote } from "@/components/ui";
+import { Chip, PageHeader, PendingNote } from "@/components/ui";
 import type { BoardCard } from "@/lib/dashboard/board";
 import { formatInteger, formatMoney, formatVideoNumber } from "@/lib/dashboard/format";
 import { requireCurrentChannel } from "@/lib/dashboard/context";
 import { getProductionData } from "@/lib/dashboard/queries";
 import { getDb } from "@/lib/db";
+import { ProductionActions } from "./ProductionActions";
 
 export const metadata: Metadata = { title: "Production · Studio" };
 
 /** Lien vers la validation qui attend, pour les cartes jaunes. */
 function validationHref(card: BoardCard): string | null {
   if (card.stage === "AWAITING_V1") return "/validations?item=v1";
-  if (card.stage === "AWAITING_V2" || card.stage === "AWAITING_V3") return `/validations?item=${card.id}`;
+  if (card.stage === "AWAITING_V2" || card.stage === "AWAITING_V3" || card.stage === "NEEDS_FIX") return `/validations?item=${card.id}`;
   return null;
 }
 
@@ -40,7 +41,10 @@ function VideoCard({ card }: { card: BoardCard }) {
   );
 }
 
-export default async function ProductionPage() {
+type ProductionPageProps = { searchParams: Promise<{ fait?: string | string[] }> };
+
+export default async function ProductionPage({ searchParams }: ProductionPageProps) {
+  const { fait } = await searchParams;
   const channel = await requireCurrentChannel();
   const data = await getProductionData(getDb(), channel.id, new Date());
   const monthlyBudget = Number(process.env.BUDGET_MENSUEL ?? "");
@@ -57,21 +61,19 @@ export default async function ProductionPage() {
 
   return (
     <>
-      <PageHeader
-        title="Production"
-        description="Chaque vidéo avance d'un agent à l'autre. Les cartes jaunes attendent ta validation."
-        actions={
-          <>
-            <button type="button" className={buttonClass("ghost")} disabled>
-              Nouvelle vidéo
-            </button>
-            <button type="button" className={buttonClass("ink")} disabled>
-              Lancer la veille de la semaine
-            </button>
-          </>
-        }
-      />
-      <PendingNote>Les deux boutons seront branchés à l&apos;étape 3, avec la machine à états.</PendingNote>
+      <PageHeader title="Production" description="Chaque vidéo avance d'un agent à l'autre. Les cartes jaunes attendent ta validation." />
+      {fait === "video" ? (
+        <p role="status" className="rounded-[14px] bg-ink px-4 py-3 font-semibold text-white">
+          Vidéo créée : elle part chez le recherchiste.
+        </p>
+      ) : null}
+      <ProductionActions />
+      {data.queuedJobs > 0 ? (
+        <PendingNote>
+          {data.queuedJobs === 1 ? "1 tâche d'agent attend" : `${data.queuedJobs} tâches d'agents attendent`} le worker, qui les exécutera dès que les agents
+          seront implémentés.
+        </PendingNote>
+      ) : null}
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(180px,100%),1fr))] gap-3">
         {kpis.map((kpi) => (

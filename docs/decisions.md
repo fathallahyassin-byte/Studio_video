@@ -2,6 +2,25 @@
 
 Une entrée par décision, la plus récente en haut.
 
+## 2026-11-22 — Machine à états et file de tâches (étape 3)
+- Contexte : transitions de `Stage`, validations V1/V2/V3, notifications, et « reprise sans doublon » (CLAUDE.md §5, §8, §8 bis).
+- Décision :
+  - Règles pures dans `lib/pipeline/machine.ts`, appliquées par `lib/pipeline/service.ts`. Chaque changement d'étape écrit dans une seule transaction : la nouvelle étape (seulement si la vidéo n'a pas bougé entre-temps), une ligne `StageTransition`, la `Validation` éventuelle et les `AgentJob` de l'étape suivante. Deux décisions simultanées : une seule passe.
+  - Une décision V1, V2 ou V3 ne peut venir que d'un acteur humain : l'orchestrateur (agent 0) ne peut pas en sauter une.
+  - V1 : « Valider la sélection » ou « Écarter la sélection » sur les idées cochées (nouvelle décision `REJECTED`) ; les autres restent en attente. V2 « Demander une correction » renvoie au scénariste. V3 « Demander une correction » renvoie à l'étape choisie (script, visuels et son, montage ou contrôle), proposée d'après l'agent responsable du premier point « ko ». Une note est obligatoire pour une correction.
+  - Les vidéos `NEEDS_FIX` rejoignent la file « À valider » : « Relancer l'étape » ou « Abandonner la vidéo ».
+  - « Nouvelle vidéo » crée une idée humaine validée d'office en V1, qui part en recherche. « Lancer la veille » crée une tâche pour l'agent 2, une seule par semaine ISO.
+  - `AgentJob` sert de file durable : clé unique `transitionId:agent-N`, donc une reprise après correction relance vraiment l'agent, et un redémarrage ne crée pas de doublon. Les tâches encore en file d'une étape quittée sont annulées.
+  - Publication : interdite sans V3 approuvée, en code (`PUBLISHED`) et en base (trigger sur `Publication`).
+  - Notifications : Telegram si `NOTIFY_CHANNEL=telegram` et ses deux variables sont remplies, sinon la console. L'e-mail n'est pas encore branché. Un échec d'envoi est journalisé sans bloquer la décision.
+  - Test e2e Playwright du parcours V1 → V2 → V3 sur les données de démo (`npm run test:e2e`, base jetable `E2E_DATABASE_URL`), avec le navigateur Edge déjà installé.
+- Alternatives écartées : envoyer la tâche à la file depuis le code après la transaction (une panne entre les deux perd la tâche).
+
+## 2026-11-22 — File de tâches dans PostgreSQL (remplace BullMQ + Redis)
+- Contexte : les tâches (`AgentJob`) sont déjà écrites dans la même transaction que le changement d'étape. Choix validé par le propriétaire.
+- Décision : le worker (`jobs/worker.ts`, `npm run worker`) prend les tâches directement dans PostgreSQL avec `FOR UPDATE SKIP LOCKED` : plusieurs workers ne prennent jamais la même tâche. Une tâche restée « en cours » après un crash est remise en file ; `runAgent` ne rappelle jamais un modèle déjà payé pour la même clé. Relances avec délai croissant, puis échec définitif et alerte. Les tâches planifiées (veille du lundi 7 h, analyse du lundi 6 h) sont créées par le worker avec une clé par semaine. Plus de Redis dans `docker-compose.yml`.
+- Alternatives écartées : BullMQ + Redis (un service de plus et un relais à maintenir entre Postgres et Redis), Inngest.
+
 ## 2026-11-22 — Interface (étape 2)
 - Contexte : les 5 écrans de la maquette et `/agents/[slug]`, branchés sur la base, avant la machine à états (étape 3).
 - Décision :
@@ -48,10 +67,11 @@ Une entrée par décision, la plus récente en haut.
 
 ## 2026-11-22 — Développement local : Docker Compose
 - Contexte : ni PostgreSQL ni Redis sur la machine de dev.
-- Décision : `docker-compose.yml` avec PostgreSQL 17 et Redis 7 (`noeviction`, exigé par BullMQ), ports limités à 127.0.0.1. Dépanne sans Docker : `npx prisma dev` lance un Postgres local temporaire (sans Redis).
+- Décision : `docker-compose.yml` avec PostgreSQL 17 (Redis retiré depuis : voir « File de tâches dans PostgreSQL »), port limité à 127.0.0.1. Dépanne sans Docker : `npx prisma dev` lance un Postgres local temporaire (sans Redis).
 - Alternatives écartées : Postgres et Redis hébergés dès le dev.
 
-## 2026-11-22 — File de tâches : BullMQ + Redis
+## 2026-11-22 — File de tâches : BullMQ + Redis (remplacée)
+- **Remplacée** le même jour par « File de tâches dans PostgreSQL ».
 - Contexte : appels d'agents, générations et rendus de plusieurs minutes, dans un worker actif en continu (CLAUDE.md §8 bis).
 - Décision : BullMQ sur Redis. Worker Node séparé dans `jobs/`, `jobId` = clé d'idempotence, tâches planifiées (cron) avec les jobs répétables de BullMQ. Installé à l'étape 3, avec la machine à états.
 - Alternatives écartées : Inngest (fonctions appelées par HTTP, moins naturel pour un worker permanent et des rendus longs).

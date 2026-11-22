@@ -21,7 +21,8 @@ Session principale uniquement : un fork ne modifie aucun fichier de ce dossier, 
 
 ## Ce que ton fork écrit
 
-- `definition.ts` : exporte `definition`, de type `AgentDefinition<TonEntree, typeof outputSchema>`.
+- `definition.ts` : exporte `definition`, de type `AgentDefinition<AgentJobInput, typeof outputSchema>`.
+  - Le worker lance chaque agent depuis une ligne `AgentJob` : l'entrée contient `videoId` (lis le reste en base : idée, dossier, script…), `channelId`, la `note` de l'humain et un `payload` (formulaire de l'agent 1, à valider avec Zod).
   - `buildVariables` : une valeur texte par `{{VARIABLE}}` du prompt (JSON sérialisé si besoin).
   - `normalize` : les recalculs que ton AGENT.md demande « en code » (scores, confiances forcées…).
   - `controls` : les refus en code ; chaque `{ ok: false, reason }` est renvoyé au modèle.
@@ -29,6 +30,22 @@ Session principale uniquement : un fork ne modifie aucun fichier de ce dossier, 
 - `ui/Panel.tsx` : exporte `Panel(props: AgentPanelProps)`, affiché sous l'en-tête générique de `/agents/[slug]`.
 
 Pas besoin de toucher aux registres : ils importent déjà `definition` et `Panel` depuis ton dossier.
+
+## Faire avancer la vidéo depuis `onSuccess`
+
+Ne change jamais `Video.stage` toi-même : passe par `lib/pipeline/service.ts`, qui journalise, crée les tâches suivantes et prévient l'humain.
+
+| Agent | Après sa sortie |
+| --- | --- |
+| 2 veilleur | `proposeIdeas(deps, channelId, idees, acteur)` : une Video par idée en `AWAITING_V1`, une seule notification |
+| 3 recherchiste | `completeStage(..., "RESEARCH_DONE")`, ou `blockVideo(...)` avec l'angle de remplacement si `angle_a_changer` |
+| 4 scénariste | `completeStage(..., "SCRIPT_DONE")` → `AWAITING_V2` |
+| 5 et 6 | enregistrer `storyboardJson` / `audioJson`, puis `completeStage(..., "MEDIA_DONE")` : la vidéo n'avance qu'avec les deux |
+| 7 monteur | `completeStage(..., "EDIT_DONE")` → rendu |
+| 8 contrôle qualité | `QA_PASSED` si GO ou GO_AVEC_CORRECTIONS, sinon `blockVideo(...)` |
+| 9 publication | crée les `Publication` (refusées en base sans V3 approuvée) |
+
+L'acteur d'un agent est `{ kind: "agent", agentId: N }`. Une décision V1, V2 ou V3 avec un acteur agent est refusée. La note de l'humain (correction V2 ou V3, reprise) est dans `AgentJob.note`.
 
 ## Tester
 

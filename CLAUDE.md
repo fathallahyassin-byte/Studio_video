@@ -153,11 +153,13 @@ npm run build        # build de prod
 npm run lint         # ESLint
 npm run typecheck    # tsc --noEmit
 npm run test         # Vitest (tests d'intégration en plus si TEST_DATABASE_URL est défini)
-npm run db:up        # PostgreSQL + Redis via Docker Compose (db:down pour arrêter)
+npm run test:e2e     # Playwright, parcours V1 → V2 → V3 (E2E_DATABASE_URL : base jetable, vidée à chaque lancement)
+npm run db:up        # PostgreSQL via Docker Compose (db:down pour arrêter)
 npm run db:migrate   # prisma migrate dev
 npm run db:seed      # chaîne, 11 agents, import des prompt.md (idempotent)
 npm run db:seed:demo # données d'exemple pour voir les écrans (base sans vidéo uniquement)
 npm run auth:setup   # crée le compte de connexion dans .env.local
+npm run worker       # worker : tâches des agents (file dans PostgreSQL) et planning du lundi
 npx prisma studio
 ```
 

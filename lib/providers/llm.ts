@@ -26,6 +26,14 @@ export type LlmProvider = {
   complete(request: LlmRequest): Promise<LlmResponse>;
 };
 
+/**
+ * Fournisseur LLM utilisé par le worker. Aucun n'est encore choisi (docs/decisions.md) :
+ * tant que c'est le cas, le worker laisse les tâches d'agents en file au lieu de les faire échouer.
+ */
+export function getConfiguredLlmProvider(): LlmProvider | null {
+  return null;
+}
+
 /** Erreur du fournisseur (réseau, quota, panne) : ce n'est pas la faute du modèle. */
 export class LlmProviderError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {

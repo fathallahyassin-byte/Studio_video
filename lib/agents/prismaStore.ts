@@ -1,6 +1,8 @@
 import { parseAgentId } from "@/agents/_shared/catalog";
 import { Prisma, type PrismaClient } from "@/lib/generated/prisma/client";
 import { toInputJson } from "@/lib/json";
+import { blockVideo } from "@/lib/pipeline/service";
+import { silentNotifier } from "@/lib/providers/notify";
 import type { AgentRunStore, StoredAttempt } from "./store";
 
 export function createPrismaRunStore(db: PrismaClient): AgentRunStore {
@@ -64,11 +66,9 @@ export function createPrismaRunStore(db: PrismaClient): AgentRunStore {
       await db.agentRun.update({ where: { id: runId }, data: { successHandledAt: new Date() } });
     },
 
-    // Transition provisoire : l'étape 3 la fera passer par la machine à états de lib/pipeline.
+    // runAgent a déjà alerté l'humain : la transition ne renvoie pas de seconde notification.
     async markNeedsFix(videoId, reason) {
-      const video = await db.video.findUniqueOrThrow({ where: { id: videoId }, select: { stage: true, blockedAt: true } });
-      const blockedAt = video.stage === "NEEDS_FIX" ? video.blockedAt : video.stage;
-      await db.video.update({ where: { id: videoId }, data: { stage: "NEEDS_FIX", blockedAt, blockedReason: reason } });
+      await blockVideo({ db, notifier: silentNotifier }, { videoId, reason, actor: { kind: "system" } });
     },
   };
 }

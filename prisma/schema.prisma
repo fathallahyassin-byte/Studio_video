@@ -61,6 +61,20 @@ enum Gate {
 enum Decision {
   APPROVED
   CHANGES_REQUESTED
+  /// V1 : idée écartée
+  REJECTED
+}
+
+enum JobKind {
+  AGENT
+  RENDER
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
 }
 
 enum AssetType {
@@ -103,6 +117,7 @@ model Channel {
   bibleVersions BibleVersion[]  @relation("ChannelBibles")
   videos        Video[]
   agentRuns     AgentRun[]
+  jobs          AgentJob[]
   reports       AnalystReport[]
   experiments   Experiment[]
   createdAt     DateTime        @default(now())
@@ -196,8 +211,61 @@ model Video {
   validations  Validation[]
   assets       Asset[]
   publications Publication[]
+  transitions  StageTransition[]
+  jobs         AgentJob[]
 
   @@index([channelId, stage])
+}
+
+/// Journal des changements d'étape, écrit par lib/pipeline dans la même transaction que le changement.
+model StageTransition {
+  id        String   @id @default(cuid())
+  videoId   String
+  video     Video    @relation(fields: [videoId], references: [id])
+  from      Stage?
+  to        Stage
+  event     String
+  /// « humain », « agent-4 », « système »
+  actor     String
+  note      String?
+  createdAt DateTime @default(now())
+
+  jobs AgentJob[]
+
+  @@index([videoId, createdAt])
+}
+
+/// Tâche à exécuter par le worker (appel d'agent, rendu). Créée dans la même transaction
+/// que le changement d'étape qui la déclenche : pas de tâche perdue, pas de doublon (jobKey unique).
+model AgentJob {
+  id           String           @id @default(cuid())
+  jobKey       String           @unique
+  kind         JobKind
+  channelId    String
+  channel      Channel          @relation(fields: [channelId], references: [id])
+  videoId      String?
+  video        Video?           @relation(fields: [videoId], references: [id])
+  agentId      Int?
+  /// étape pour laquelle la tâche a été créée
+  stage        Stage?
+  transitionId String?
+  transition   StageTransition? @relation(fields: [transitionId], references: [id])
+  /// note de l'humain pour l'agent (V2 ou V3 « Demander une correction », reprise)
+  note         String?
+  /// entrées propres à la tâche (ex. formulaire du stratège de niche)
+  payload      Json?
+  status       JobStatus        @default(QUEUED)
+  /// nombre de prises par un worker
+  attempts     Int              @default(0)
+  lastError    String?
+  runAfter     DateTime         @default(now())
+  /// prise par un worker à cet instant ; une tâche RUNNING trop ancienne est remise en file
+  lockedAt     DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([status, runAfter])
+  @@index([videoId])
 }
 
 /// Une ligne par tentative d'appel à un agent.

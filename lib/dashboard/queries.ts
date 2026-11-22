@@ -4,7 +4,8 @@ import { deriveAgentState, type AgentState } from "./agentStatus";
 import { buildBoard, type BoardColumn } from "./board";
 import { startOfMonth } from "./format";
 import { parseAnalystReport, parseIdea, parseQaReport, parseScript, type AnalystReportContent, type QaReport, type Script } from "./payloads";
-import { AWAITING_STAGES, buildQueue, type QueueItem } from "./queue";
+import { buildQueue, QUEUE_STAGES, type QueueItem } from "./queue";
+import type { V3ReturnStage } from "@/lib/pipeline/machine";
 
 // Lectures en base pour les écrans du tableau de bord. Une seule chaîne pour l'instant : la plus ancienne.
 
@@ -24,7 +25,7 @@ async function stagesInProgress(db: PrismaClient, channelId: string): Promise<Se
 
 async function loadQueue(db: PrismaClient, channelId: string): Promise<QueueItem[]> {
   const videos = await db.video.findMany({
-    where: { channelId, stage: { in: [...AWAITING_STAGES] } },
+    where: { channelId, stage: { in: [...QUEUE_STAGES] } },
     select: { id: true, number: true, title: true, stage: true, updatedAt: true },
   });
   return buildQueue(videos);
@@ -46,12 +47,14 @@ export type ProductionData = {
   queueCount: number;
   publishedThisMonth: number;
   costThisMonth: number;
+  /** tâches d'agents en attente du worker */
+  queuedJobs: number;
 };
 
 export async function getProductionData(db: PrismaClient, channelId: string, now: Date): Promise<ProductionData> {
   const monthStart = startOfMonth(now);
   const publishedSince = new Date(now.getTime() - PUBLISHED_VISIBLE_DAYS * 24 * 60 * 60 * 1000);
-  const [videos, inProgress, queue, published, cost] = await Promise.all([
+  const [videos, inProgress, queue, published, cost, queuedJobs] = await Promise.all([
     db.video.findMany({
       where: { channelId, stage: { not: "REJECTED" }, NOT: { stage: "PUBLISHED", updatedAt: { lt: publishedSince } } },
       select: { id: true, number: true, title: true, stage: true, blockedAt: true, blockedReason: true },
@@ -65,6 +68,7 @@ export async function getProductionData(db: PrismaClient, channelId: string, now
       select: { videoId: true },
     }),
     db.agentRun.aggregate({ where: { channelId, createdAt: { gte: monthStart } }, _sum: { cost: true } }),
+    db.agentJob.count({ where: { channelId, status: "QUEUED" } }),
   ]);
   return {
     columns: buildBoard(videos),
@@ -72,6 +76,7 @@ export async function getProductionData(db: PrismaClient, channelId: string, now
     queueCount: queue.length,
     publishedThisMonth: published.length,
     costThisMonth: cost._sum.cost?.toNumber() ?? 0,
+    queuedJobs,
   };
 }
 
@@ -79,8 +84,18 @@ export type IdeaRow = { videoId: string; number: number; title: string; score: n
 
 export type QueueDetail =
   | { kind: "ideas"; ideas: IdeaRow[] }
-  | { kind: "script"; script: Script | null }
-  | { kind: "qa"; report: QaReport | null };
+  | { kind: "script"; videoId: string; script: Script | null }
+  | { kind: "qa"; videoId: string; report: QaReport | null; suggestedReturn: V3ReturnStage }
+  | { kind: "fix"; videoId: string; reason: string | null; blockedAt: Stage | null };
+
+/** Étape où renvoyer la vidéo en V3, d'après l'agent responsable du premier point « ko ». */
+export function suggestReturnStage(report: QaReport | null): V3ReturnStage {
+  const responsible = report?.controles.find((check) => check.statut === "ko" && check.agent_responsable)?.agent_responsable ?? "";
+  if (responsible.startsWith("04")) return "SCRIPT";
+  if (responsible.startsWith("05") || responsible.startsWith("06")) return "VISUALS_AND_AUDIO";
+  if (responsible.startsWith("08")) return "QA";
+  return "EDIT";
+}
 
 export async function getValidationData(db: PrismaClient, channelId: string) {
   return { queue: await loadQueue(db, channelId) };
@@ -89,7 +104,7 @@ export async function getValidationData(db: PrismaClient, channelId: string) {
 export async function getQueueDetail(db: PrismaClient, item: QueueItem): Promise<QueueDetail> {
   const videos = await db.video.findMany({
     where: { id: { in: item.videoIds } },
-    select: { id: true, number: true, title: true, ideaJson: true, scriptJson: true, qaJson: true },
+    select: { id: true, number: true, title: true, ideaJson: true, scriptJson: true, qaJson: true, blockedAt: true, blockedReason: true },
   });
   if (item.gate === "V1") {
     const ideas = videos.map((video): IdeaRow => {
@@ -99,8 +114,11 @@ export async function getQueueDetail(db: PrismaClient, item: QueueItem): Promise
     return { kind: "ideas", ideas: ideas.sort((a, b) => (b.score ?? -1) - (a.score ?? -1)) };
   }
   const video = videos[0];
-  if (item.gate === "V2") return { kind: "script", script: parseScript(video?.scriptJson) };
-  return { kind: "qa", report: parseQaReport(video?.qaJson) };
+  const videoId = video?.id ?? "";
+  if (item.gate === "V2") return { kind: "script", videoId, script: parseScript(video?.scriptJson) };
+  if (item.gate === "FIX") return { kind: "fix", videoId, reason: video?.blockedReason ?? null, blockedAt: video?.blockedAt ?? null };
+  const report = parseQaReport(video?.qaJson);
+  return { kind: "qa", videoId, report, suggestedReturn: suggestReturnStage(report) };
 }
 
 export type AgentCard = {

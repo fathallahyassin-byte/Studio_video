@@ -7,6 +7,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Les tests d'intégration partagent une base : un fichier à la fois quand elle est fournie.
+    fileParallelism: !process.env.TEST_DATABASE_URL,
     include: ["**/*.test.ts"],
     exclude: ["node_modules/**", ".next/**", "e2e/**"],
   },
