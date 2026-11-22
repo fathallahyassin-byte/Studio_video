@@ -156,6 +156,7 @@ npm run test         # Vitest (tests d'intégration en plus si TEST_DATABASE_URL
 npm run db:up        # PostgreSQL + Redis via Docker Compose (db:down pour arrêter)
 npm run db:migrate   # prisma migrate dev
 npm run db:seed      # chaîne, 11 agents, import des prompt.md (idempotent)
+npm run db:seed:demo # données d'exemple pour voir les écrans (base sans vidéo uniquement)
 npm run auth:setup   # crée le compte de connexion dans .env.local
 npx prisma studio
 ```

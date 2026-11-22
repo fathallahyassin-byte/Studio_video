@@ -2,6 +2,19 @@
 
 Une entrée par décision, la plus récente en haut.
 
+## 2026-11-22 — Interface (étape 2)
+- Contexte : les 5 écrans de la maquette et `/agents/[slug]`, branchés sur la base, avant la machine à états (étape 3).
+- Décision :
+  - Les commandes qui font avancer le pipeline (« Lancer la veille », « Nouvelle vidéo », « Valider », « Demander une correction », « Tester sur la dernière vidéo ») sont affichées mais désactivées, avec une note. Elles seront branchées à l'étape 3 (ou 4 pour le test d'un agent).
+  - Déjà actifs, parce qu'ils ne touchent pas au pipeline : enregistrer une version de prompt et le modèle d'un agent, remettre une ancienne version en production, enregistrer une version de la bible (formulaire ou YAML complet), remettre une ancienne version en service, partir du modèle de bible.
+  - La bible s'édite champ par champ avec la bibliothèque `yaml` (2.9, sans dépendance) : elle réécrit les champs sans perdre les commentaires ni les autres clés. Un enregistrement de prompt refuse une `{{VARIABLE}}` que le code de l'agent ne connaît pas.
+  - La file V1 regroupe toutes les idées en attente en une seule entrée ; V2 et V3 ont une entrée par vidéo. Une vidéo en `NEEDS_FIX` reste dans la colonne de l'étape à reprendre, en jaune « À corriger ».
+  - Le 4ᵉ indicateur de Production est « Coût ce mois » (somme des AgentRun du mois, comparée à `BUDGET_MENSUEL`) au lieu du « coût moyen par vidéo » de la maquette, pour suivre le plafond mensuel de CLAUDE.md §8 bis.
+  - Le jaune sert à l'élément de menu actif comme dans la maquette, et sinon seulement à ce qui attend une action.
+  - Les formulaires d'édition gardent la saisie après une erreur (`components/useKeptForm.ts`) : React 19 vide sinon le formulaire à chaque envoi.
+  - Données de démonstration séparées : `npm run db:seed:demo`, refusé si la base contient déjà des vidéos.
+- Alternatives écartées : éditer la bible uniquement en YAML brut (moins lisible) ; brancher les validations avant d'avoir la machine à états (le contrôle V3 doit vivre dans `lib/pipeline`).
+
 ## 2026-11-22 — Versions des outils
 - Contexte : au 22 novembre 2026, `npm` donne TypeScript 7 (compilateur natif) et Prisma 8 en RC sur le tag `latest`.
 - Décision : TypeScript 5.9 (typescript-eslint exige < 6.1), Prisma 7.10 (dernière stable), ESLint 9 (eslint-plugin-react ne gère pas encore ESLint 10), Next.js 16.4, Zod 4, Tailwind 4, Vitest 5.

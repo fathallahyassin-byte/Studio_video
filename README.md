@@ -12,11 +12,14 @@ cp .env.example .env.local  # puis complète .env.local au besoin
 npm run db:up               # PostgreSQL + Redis (docker-compose.yml)
 npm run db:migrate          # applique les migrations
 npm run db:seed             # chaîne par défaut, 11 agents, prompts
+npm run db:seed:demo        # facultatif : vidéos, bible et stats d'exemple (base vide uniquement)
 npm run auth:setup          # crée ton compte : e-mail, mot de passe, application d'authentification
 npm run dev                 # http://localhost:3000
 ```
 
 Sans Docker, `npx prisma dev` lance un PostgreSQL local temporaire : copie l'URL `postgres://…` qu'il affiche dans `DATABASE_URL`. Redis manquera, mais il ne sert qu'à partir de l'étape 3.
+
+Pour effacer la démo et repartir d'une base vide : `npx prisma migrate reset`, puis `npm run db:seed`.
 
 Après une modification d'un `prompt.md`, relance `npm run db:seed` : il crée une nouvelle version, sans écraser une version faite depuis l'interface.
 
