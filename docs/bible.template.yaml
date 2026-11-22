@@ -1,0 +1,56 @@
+# BIBLE DE LA CHAÎNE — v1 (AAAA-MM-JJ)
+chaine:
+  nom: "{{NOM}}"
+  niche: "{{NICHE}}"            # public précis + angle
+  promesse: "{{PROMESSE}}"      # ce que le spectateur gagne, en une phrase
+  langue: fr-FR
+  plateformes: [tiktok, instagram_reels, youtube_shorts]
+
+audience:
+  persona: "{{PERSONA}}"
+  niveau: debutant              # debutant | intermediaire | expert
+  pays: [FR, BE, CH, CA]
+
+ligne_editoriale:
+  piliers: ["{{PILIER_1}}", "{{PILIER_2}}", "{{PILIER_3}}"]
+  formats: ["{{FORMAT_1}}", "{{FORMAT_2}}", "{{FORMAT_3}}"]
+  ton: "{{TON}}"
+  tutoiement: true
+  angle_original: "{{CE_QUE_LA_CHAINE_APPORTE_DE_PLUS}}"
+  mots_interdits: ["incroyable", "vous n'allez pas le croire", "choquant"]
+  sujets_interdits: ["conseil médical", "conseil financier", "conseil juridique", "politique", "personnes réelles mises en scène"]
+
+format_video:
+  ratio: "9:16"
+  resolution: 1080x1920
+  fps: 30
+  duree_cible_s: [65, 90]       # plus d'1 min (Creator Rewards TikTok), moins de 3 min (recommandation Reels et Shorts)
+  debit_voix_mots_par_s: 2.6
+  sous_titres: "incrustés, 1 à 4 mots, mot prononcé surligné"
+  zone_sure: "texte important au centre, rien dans les 20 % du bas ni dans la colonne de droite"
+  loudness_lufs: -14
+
+identite:
+  voix: "{{MOTEUR_TTS}} / {{ID_VOIX}}"
+  style_visuel_en: "{{SUFFIXE_STYLE}}"
+  palette: ["{{COULEUR_1}}", "{{COULEUR_2}}", "{{ACCENT}}"]
+  police_sous_titres: "{{POLICE}}"
+  signature_sonore: "{{SIGNATURE}}"
+  cta: "{{CTA}}"
+
+regles:
+  - "Chaque fait vient du dossier du recherchiste, avec sa source."
+  - "Chaque vidéo apporte une info, un angle ou une histoire absente des 10 premiers résultats sur le sujet."
+  - "Jamais deux vidéos d'affilée sur le même gabarit : varier accroche, structure et visuels."
+  - "Aucune personne réelle identifiable, aucun logo, aucune œuvre ni personnage protégés."
+  - "Aucun avatar ni voix IA présenté comme un expert humain (santé, droit, finance, politique)."
+  - "Visuel ou son réaliste généré par IA : étiquette IA activée sur chaque plateforme."
+  - "Musique uniquement sous licence couvrant l'usage commercial sur les 3 plateformes."
+
+objectifs:
+  kpi_principal: "pourcentage de visionnage complet"
+  critere_validation_niche: "{{CRITERE}}"
+  monetisation: ["{{SOURCE_1}}", "{{SOURCE_2}}"]
+
+apprentissages:
+  - "aucun pour l'instant"

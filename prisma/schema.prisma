@@ -1,0 +1,340 @@
+// Modèle de données de Studio. Les choix qui s'écartent de CLAUDE.md §4 sont notés dans docs/decisions.md.
+// Les contraintes CHECK (licence musicale, tentative 1 à 3) sont dans la migration SQL : Prisma ne les gère pas.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Platform {
+  TIKTOK
+  INSTAGRAM
+  YOUTUBE
+}
+
+/// Étapes d'une vidéo, dans l'ordre du pipeline, plus REJECTED et NEEDS_FIX.
+enum Stage {
+  IDEA
+  AWAITING_V1
+  RESEARCH
+  SCRIPT
+  AWAITING_V2
+  VISUALS_AND_AUDIO
+  EDIT
+  RENDER
+  QA
+  AWAITING_V3
+  SCHEDULED
+  PUBLISHED
+  REJECTED
+  NEEDS_FIX
+}
+
+enum BibleAuthor {
+  HUMAN
+  AGENT_1
+  AGENT_10
+}
+
+enum PromptSource {
+  FILE
+  UI
+}
+
+enum RunStatus {
+  OK
+  INVALID_JSON
+  CONTROL_FAILED
+  ERROR
+}
+
+enum Gate {
+  V1
+  V2
+  V3
+}
+
+enum Decision {
+  APPROVED
+  CHANGES_REQUESTED
+}
+
+enum AssetType {
+  IMAGE
+  VIDEO
+  VOICE
+  MUSIC
+  RENDER
+}
+
+enum PublishMode {
+  MANUAL
+  API
+}
+
+enum PublicationStatus {
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+}
+
+enum ExperimentStatus {
+  PROPOSED
+  RUNNING
+  DONE
+  ABANDONED
+}
+
+model Channel {
+  id        String     @id @default(cuid())
+  name      String
+  niche     String
+  platforms Platform[]
+
+  /// Bible lue par les agents. Les versions sont immuables : adopter une version = changer ce pointeur.
+  activeBibleVersionId String?       @unique
+  activeBibleVersion   BibleVersion? @relation("ActiveBible", fields: [activeBibleVersionId], references: [id])
+
+  bibleVersions BibleVersion[]  @relation("ChannelBibles")
+  videos        Video[]
+  agentRuns     AgentRun[]
+  reports       AnalystReport[]
+  experiments   Experiment[]
+  createdAt     DateTime        @default(now())
+}
+
+/// Immuable : chaque enregistrement crée une nouvelle version, on ne modifie ni ne supprime jamais une version.
+model BibleVersion {
+  id        String      @id @default(cuid())
+  channelId String
+  channel   Channel     @relation("ChannelBibles", fields: [channelId], references: [id])
+  version   Int
+  content   String
+  author    BibleAuthor
+  note      String?
+  createdAt DateTime    @default(now())
+
+  activeFor Channel?   @relation("ActiveBible")
+  agentRuns AgentRun[]
+
+  @@unique([channelId, version])
+}
+
+model Agent {
+  /// 0 à 10, comme le numéro du dossier agents/NN-nom/
+  id       Int     @id
+  slug     String  @unique
+  name     String
+  role     String
+  /// Modèle LLM de l'agent, réglé depuis l'interface. Vide = l'agent ne peut pas être appelé.
+  model    String  @default("")
+  active   Boolean @default(true)
+  /// Réglages conservés par agent (signaux du veilleur, mots-clés de la publication…)
+  settings Json    @default("{}")
+
+  /// Version du prompt « en production ».
+  activePromptVersionId String?        @unique
+  activePromptVersion   PromptVersion? @relation("ActivePrompt", fields: [activePromptVersionId], references: [id])
+
+  promptVersions PromptVersion[] @relation("AgentPrompts")
+  runs           AgentRun[]
+}
+
+/// Immuable, comme BibleVersion.
+model PromptVersion {
+  id        String       @id @default(cuid())
+  agentId   Int
+  agent     Agent        @relation("AgentPrompts", fields: [agentId], references: [id])
+  version   Int
+  content   String
+  source    PromptSource
+  notes     String?
+  createdAt DateTime     @default(now())
+
+  activeFor Agent?     @relation("ActivePrompt")
+  runs      AgentRun[]
+
+  @@unique([agentId, version])
+}
+
+model Video {
+  id        String  @id @default(cuid())
+  /// Numéro lisible (V-031)
+  number    Int     @unique @default(autoincrement())
+  channelId String
+  channel   Channel @relation(fields: [channelId], references: [id])
+  title     String
+  stage     Stage   @default(IDEA)
+
+  /// Étape à reprendre quand stage = NEEDS_FIX
+  blockedAt     Stage?
+  blockedReason String?
+
+  /// Lu par le contrôle qualité (agent 8)
+  partnership String @default("aucun")
+
+  ideaJson       Json?
+  dossierJson    Json?
+  scriptJson     Json?
+  storyboardJson Json?
+  audioJson      Json?
+  timelineJson   Json?
+  qaJson         Json?
+  publishJson    Json?
+
+  /// Somme des coûts des AgentRun et des générations, dans la monnaie des budgets (.env)
+  totalCost Decimal  @default(0) @db.Decimal(12, 4)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  runs         AgentRun[]
+  validations  Validation[]
+  assets       Asset[]
+  publications Publication[]
+
+  @@index([channelId, stage])
+}
+
+/// Une ligne par tentative d'appel à un agent.
+model AgentRun {
+  id              String        @id @default(cuid())
+  /// Clé d'idempotence de l'exécution (vidéo, étape, agent…). Les tentatives d'une même exécution la partagent.
+  jobKey          String
+  /// 1 à 3
+  attempt         Int
+  channelId       String
+  channel         Channel       @relation(fields: [channelId], references: [id])
+  videoId         String?
+  video           Video?        @relation(fields: [videoId], references: [id])
+  agentId         Int
+  agent           Agent         @relation(fields: [agentId], references: [id])
+  promptVersionId String
+  promptVersion   PromptVersion @relation(fields: [promptVersionId], references: [id])
+  /// Null pour l'agent 1, qui travaille avant la première bible.
+  bibleVersionId  String?
+  bibleVersion    BibleVersion? @relation(fields: [bibleVersionId], references: [id])
+  model           String
+
+  /// Variables injectées dans le prompt (hors BIBLE, retrouvable par bibleVersionId)
+  input     Json
+  /// Sortie validée (et normalisée en code) ; null si la tentative a échoué
+  output    Json?
+  /// Texte brut renvoyé par le modèle
+  rawOutput String?
+  status    RunStatus
+  error     String?
+
+  inputTokens  Int     @default(0)
+  outputTokens Int     @default(0)
+  cost         Decimal @default(0) @db.Decimal(12, 4)
+  durationMs   Int     @default(0)
+
+  /// Renseigné quand onSuccess a fini : une reprise ne le relance pas.
+  successHandledAt DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@unique([jobKey, attempt])
+  @@index([videoId])
+  @@index([agentId, createdAt])
+}
+
+model Validation {
+  id        String   @id @default(cuid())
+  videoId   String
+  video     Video    @relation(fields: [videoId], references: [id])
+  gate      Gate
+  decision  Decision
+  note      String?
+  decidedBy String
+  createdAt DateTime @default(now())
+
+  @@index([videoId, gate])
+}
+
+model Asset {
+  id        String    @id @default(cuid())
+  videoId   String
+  video     Video     @relation(fields: [videoId], references: [id])
+  type      AssetType
+  url       String
+  provider  String
+  /// Obligatoire pour la musique (contrainte CHECK dans la migration)
+  license   String?
+  /// Plan du storyboard (P1, P2…) pour les images et vidéos
+  planId    String?
+  durationS Float?
+  createdAt DateTime  @default(now())
+
+  @@index([videoId, type])
+}
+
+model Publication {
+  id             String            @id @default(cuid())
+  videoId        String
+  video          Video             @relation(fields: [videoId], references: [id])
+  platform       Platform
+  mode           PublishMode       @default(MANUAL)
+  externalId     String?
+  status         PublicationStatus @default(SCHEDULED)
+  scheduledFor   DateTime?
+  publishedAt    DateTime?
+  /// Étiquette IA fixée par le rapport du contrôle qualité
+  aiLabel        Boolean
+  brandedContent Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  stats Stat[]
+
+  @@unique([videoId, platform])
+}
+
+model Stat {
+  id              String      @id @default(cuid())
+  publicationId   String
+  publication     Publication @relation(fields: [publicationId], references: [id])
+  date            DateTime    @db.Date
+  views           Int
+  avgWatchTimeS   Float
+  completionRate  Float
+  shares          Int
+  saves           Int
+  followersGained Int
+
+  @@unique([publicationId, date])
+}
+
+/// Rapport hebdomadaire de l'analyste (agent 10)
+model AnalystReport {
+  id                    String   @id @default(cuid())
+  channelId             String
+  channel               Channel  @relation(fields: [channelId], references: [id])
+  agentRunId            String   @unique
+  period                String
+  content               Json
+  /// Version de bible créée par « Appliquer à la bible »
+  appliedBibleVersionId String?
+  createdAt             DateTime @default(now())
+
+  experiments Experiment[]
+}
+
+model Experiment {
+  id               String           @id @default(cuid())
+  channelId        String
+  channel          Channel          @relation(fields: [channelId], references: [id])
+  reportId         String?
+  report           AnalystReport?   @relation(fields: [reportId], references: [id])
+  hypothesis       String
+  variable         String
+  successCriterion String
+  status           ExperimentStatus @default(PROPOSED)
+  startedAt        DateTime?
+  endedAt          DateTime?
+  createdAt        DateTime         @default(now())
+}

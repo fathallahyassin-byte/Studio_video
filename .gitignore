@@ -1,0 +1,17 @@
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+lib/generated/
+*.mp4
+*.mov
+*.wav
+*.mp3
+/out/
+/tmp/
+coverage/
+test-results/
+playwright-report/
