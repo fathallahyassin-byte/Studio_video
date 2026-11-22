@@ -55,6 +55,14 @@ async function syncPrompt(db: PrismaClient, meta: AgentMeta): Promise<string> {
     : `prompt v${plan.version} importé, NON activé : la version en production vient de l'interface`;
 }
 
+/** Donne LLM_DEFAULT_MODEL aux agents encore sans modèle ; un modèle choisi dans l'interface reste intact. */
+async function fillMissingModels(db: PrismaClient): Promise<void> {
+  const model = process.env.LLM_DEFAULT_MODEL?.trim();
+  if (!model) return;
+  const { count } = await db.agent.updateMany({ where: { model: "" }, data: { model } });
+  if (count > 0) console.log(`Modèle « ${model} » donné à ${count} agent(s) qui n'en avaient pas.`);
+}
+
 async function main(): Promise<void> {
   const db = getDb();
   try {
@@ -63,6 +71,7 @@ async function main(): Promise<void> {
       await upsertAgent(db, meta);
       console.log(`Agent ${String(meta.id).padStart(2, "0")} ${meta.name} : ${await syncPrompt(db, meta)}`);
     }
+    await fillMissingModels(db);
   } finally {
     await db.$disconnect();
   }

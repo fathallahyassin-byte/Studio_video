@@ -18,7 +18,9 @@ npm run dev                 # http://localhost:3000
 npm run worker              # dans un second terminal : exécute les tâches des agents
 ```
 
-Le worker prend les tâches dans PostgreSQL (table `AgentJob`), relance celles qui échouent et planifie chaque lundi l'analyse (6 h) et la veille (7 h). Tant qu'aucun fournisseur LLM n'est configuré, il laisse les tâches d'agents en file. Ctrl+C l'arrête proprement.
+Le worker prend les tâches dans PostgreSQL (table `AgentJob`), relance celles qui échouent et planifie chaque lundi l'analyse (6 h) et la veille (7 h). Ctrl+C l'arrête proprement.
+
+Les agents appellent Claude : mets ta clé dans `ANTHROPIC_API_KEY` (ou connecte-toi avec `ant auth login`). Le modèle se règle agent par agent dans sa page ; `LLM_DEFAULT_MODEL` le remplit pour ceux qui n'en ont pas au prochain `npm run db:seed`. Sans clé ni `LLM_PROVIDER`, le worker laisse les tâches d'agents en file.
 
 Sans Docker, `npx prisma dev` lance un PostgreSQL local temporaire : copie l'URL `postgres://…` qu'il affiche dans `DATABASE_URL` et ajoute `DATABASE_POOL_MAX="1"` (il ne supporte qu'une connexion à la fois).
 

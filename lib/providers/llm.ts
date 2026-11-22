@@ -26,18 +26,21 @@ export type LlmProvider = {
   complete(request: LlmRequest): Promise<LlmResponse>;
 };
 
-/**
- * Fournisseur LLM utilisé par le worker. Aucun n'est encore choisi (docs/decisions.md) :
- * tant que c'est le cas, le worker laisse les tâches d'agents en file au lieu de les faire échouer.
- */
-export function getConfiguredLlmProvider(): LlmProvider | null {
-  return null;
-}
-
-/** Erreur du fournisseur (réseau, quota, panne) : ce n'est pas la faute du modèle. */
+/** Erreur du fournisseur (réseau, quota, panne, refus) : ce n'est pas la faute du format de la réponse. */
 export class LlmProviderError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options);
     this.name = "LlmProviderError";
+  }
+}
+
+/**
+ * Configuration à corriger par l'humain (clé absente ou refusée, modèle inconnu, requête invalide).
+ * Rien n'a été facturé : runAgent ne compte pas de tentative et remonte une AgentPreconditionError.
+ */
+export class LlmConfigurationError extends LlmProviderError {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "LlmConfigurationError";
   }
 }

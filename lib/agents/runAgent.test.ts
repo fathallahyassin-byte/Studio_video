@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { AgentDefinition } from "@/agents/_shared/types";
 import type { LlmProvider, LlmRequest, LlmResponse } from "@/lib/providers/llm";
-import { LlmProviderError } from "@/lib/providers/llm";
+import { LlmConfigurationError, LlmProviderError } from "@/lib/providers/llm";
 import type { Notifier } from "@/lib/providers/notify";
 import { AgentPreconditionError } from "./errors";
 import { createMemoryRunStore } from "./memoryStore";
@@ -271,6 +271,14 @@ describe("runAgent", () => {
       const retry = { ...deps, llm: makeLlm([VALID]) };
       await expect(runAgent(request(definition), retry)).resolves.toMatchObject({ status: "ok", attempt: 2 });
       expect(retry.llm.requests[0]?.messages).toEqual([{ role: "user", content: FIRST_USER_MESSAGE }]);
+    });
+
+    it("ne compte pas de tentative pour une configuration à corriger (clé, modèle)", async () => {
+      const { definition } = makeDefinition();
+      const { store, deps } = setup([new LlmConfigurationError("Modèle inconnu")]);
+
+      await expect(runAgent(request(definition), deps)).rejects.toThrow(AgentPreconditionError);
+      expect(store.runs).toHaveLength(0);
     });
 
     it("passe en NEEDS_FIX sans lever d'erreur à la troisième panne", async () => {

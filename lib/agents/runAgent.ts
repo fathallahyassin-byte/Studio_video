@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { AgentContext, AgentDefinition, ControlResult } from "@/agents/_shared/types";
-import type { LlmMessage, LlmProvider, LlmResponse } from "@/lib/providers/llm";
+import { LlmConfigurationError, type LlmMessage, type LlmProvider, type LlmResponse } from "@/lib/providers/llm";
 import type { Notifier } from "@/lib/providers/notify";
 import { AgentPreconditionError } from "./errors";
 import { extractJson, formatZodIssues } from "./json";
@@ -153,6 +153,8 @@ async function runAttempt<TInput, TSchema extends z.ZodType>(
   try {
     response = await deps.llm.complete({ model: prepared.agent.model, system: prepared.system, messages: [...messages] });
   } catch (error) {
+    // Clé, modèle ou requête à corriger : rien n'a été facturé, aucune tentative n'est comptée.
+    if (error instanceof LlmConfigurationError) throw new AgentPreconditionError(error.message, { cause: error });
     await recordFailure(request, deps, prepared, attempt, { durationMs: now() - startedAt, rawOutput: null, error });
     return { status: "provider_error", error };
   }

@@ -2,6 +2,16 @@
 
 Une entrée par décision, la plus récente en haut.
 
+## 2026-11-22 — Fournisseur LLM : Claude (Anthropic)
+- Contexte : choix du propriétaire. Les agents passent par l'interface `LlmProvider` (CLAUDE.md §2).
+- Décision : `lib/providers/anthropic.ts`, SDK officiel `@anthropic-ai/sdk` (1.12). Activé par `LLM_PROVIDER="anthropic"`, clé `ANTHROPIC_API_KEY` (ou un profil `ant auth login`). Modèle par agent, en base ; `LLM_DEFAULT_MODEL="claude-opus-5-5"` remplit les agents sans modèle au seed.
+  - Réponses en streaming (jusqu'à 64 000 tokens de sortie, pas de coupure HTTP), pensée adaptative (toujours active sur Claude Opus 5.5), profondeur réglée par `LLM_EFFORT` (`high` par défaut ; le défaut du modèle est `medium`).
+  - Mise en cache du prompt (`cache_control`) : le prompt de l'agent et la bible sont identiques d'une relance à l'autre.
+  - Secours côté serveur en cas de refus de sécurité (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`) : le serveur relance sur un autre modèle dans le même appel. Un refus qui persiste, ou une réponse coupée, compte comme une panne du fournisseur.
+  - Coût calculé d'après les tokens et le tarif de chaque modèle (table dans le code, relevée en novembre 2026 ; modèle inconnu = tarif le plus cher), converti par `USD_EXCHANGE_RATE`.
+  - Clé absente ou refusée, modèle inconnu, requête invalide : `LlmConfigurationError`, aucune tentative comptée (rien n'est facturé), le worker garde la tâche et alerte une fois.
+- Alternatives écartées : appels HTTP directs (le SDK gère relances, streaming et types) ; un modèle moins cher par défaut (choix à faire agent par agent, depuis sa page).
+
 ## 2026-11-22 — Machine à états et file de tâches (étape 3)
 - Contexte : transitions de `Stage`, validations V1/V2/V3, notifications, et « reprise sans doublon » (CLAUDE.md §5, §8, §8 bis).
 - Décision :

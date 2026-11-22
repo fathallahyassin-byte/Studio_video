@@ -3,7 +3,7 @@
 import { loadEnvConfig } from "@next/env";
 import { getDb } from "@/lib/db";
 import { claimNextJob, requeueStaleJobs } from "@/lib/queue/queue";
-import { getConfiguredLlmProvider } from "@/lib/providers/llm";
+import { getConfiguredLlmProvider } from "@/lib/providers/llmConfig";
 import { getNotifier } from "@/lib/providers/notify";
 import { processNextJob, type JobDeps } from "./handlers";
 import { enqueueDueTasks } from "./schedule";
