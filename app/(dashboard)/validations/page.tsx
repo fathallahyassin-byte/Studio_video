@@ -175,7 +175,7 @@ function DetailBody({ detail }: { detail: QueueDetail }) {
       return (
         <>
           <FixDetail reason={detail.reason} blockedAt={detail.blockedAt} />
-          <FixForm videoId={detail.videoId} />
+          <FixForm videoId={detail.videoId} sources={detail.blockedAt === "RESEARCH" ? detail.sources : undefined} />
         </>
       );
   }

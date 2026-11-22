@@ -12,7 +12,7 @@ export type ResearchVideo = { stage: Stage; idea: unknown };
 export type ResearchPorts = {
   /** null si la vidéo n'existe pas */
   loadVideo(videoId: string): Promise<ResearchVideo | null>;
-  /** liens ajoutés par l'humain pour cette vidéo (aucun champ en base pour l'instant : voir NEEDS.md) */
+  /** liens ajoutés par l'humain pour cette vidéo (`Video.researchSources`, saisis dans « À valider ») */
   loadHumanSources(videoId: string): Promise<string[]>;
   saveDossier(videoId: string, dossier: Output): Promise<void>;
   /** RESEARCH → SCRIPT : lance le scénariste */
@@ -30,8 +30,9 @@ export function createPrismaResearchPorts(): ResearchPorts {
       const video = await getDb().video.findUnique({ where: { id: videoId }, select: { stage: true, ideaJson: true } });
       return video ? { stage: video.stage, idea: video.ideaJson } : null;
     },
-    async loadHumanSources() {
-      return [];
+    async loadHumanSources(videoId) {
+      const video = await getDb().video.findUnique({ where: { id: videoId }, select: { researchSources: true } });
+      return video?.researchSources ?? [];
     },
     async saveDossier(videoId, dossier) {
       await getDb().video.update({ where: { id: videoId }, data: { dossierJson: toInputJson(dossier) } });

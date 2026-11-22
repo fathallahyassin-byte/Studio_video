@@ -1,9 +1,9 @@
 // Tests sur une vraie base migrée et seedée. Ignorés sans TEST_DATABASE_URL (voir .env.example).
-import { PrismaPg } from "@prisma/adapter-pg";
+import { createTestDb } from "@/lib/testing/testDb";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient, type Stage } from "@/lib/generated/prisma/client";
 import type { Notification } from "@/lib/providers/notify";
-import { applyEvent, blockVideo, completeStage, decideIdeas, proposeIdeas, requestScout, TransitionError, type Actor, type PipelineDeps } from "./service";
+import { applyEvent, blockVideo, completeStage, decideIdeas, proposeIdeas, requestScout, resumeVideo, TransitionError, type Actor, type PipelineDeps } from "./service";
 
 const url = process.env.TEST_DATABASE_URL;
 const human: Actor = { kind: "human", name: "moi@example.test" };
@@ -15,7 +15,7 @@ describe.skipIf(!url)("pipeline sur base réelle", () => {
   let deps: PipelineDeps;
 
   beforeAll(() => {
-    db = new PrismaClient({ adapter: new PrismaPg({ connectionString: url ?? "" }) });
+    db = createTestDb(url ?? "");
     sent = [];
     deps = { db, notifier: { notify: async (notification) => void sent.push(notification) } };
   });
@@ -147,6 +147,26 @@ describe.skipIf(!url)("pipeline sur base réelle", () => {
     expect(await db.video.findUniqueOrThrow({ where: { id: video.id } })).toMatchObject({ stage: "SCRIPT", blockedAt: null, blockedReason: null });
     expect((await jobsOf(video.id)).map((job) => job.status)).toEqual(["FAILED", "QUEUED"]);
     expect(await db.stageTransition.count({ where: { videoId: video.id } })).toBe(3);
+  });
+
+  it("relance la recherche avec les sources de l'humain et la note", async () => {
+    const video = await videoAt("RESEARCH");
+    await blockVideo(deps, { videoId: video.id, reason: "aucun fait assez fiable", actor: { kind: "agent", agentId: 3 } });
+
+    await resumeVideo(deps, { videoId: video.id, actor: human, note: "voir le brevet", researchSources: ["https://a.example/brevet", "https://b.example"] });
+
+    expect(await db.video.findUniqueOrThrow({ where: { id: video.id } })).toMatchObject({
+      stage: "RESEARCH",
+      researchSources: ["https://a.example/brevet", "https://b.example"],
+    });
+    expect(await jobsOf(video.id)).toMatchObject([{ agentId: 3, status: "QUEUED", note: "voir le brevet" }]);
+  });
+
+  it("n'enregistre pas de sources pour une vidéo bloquée ailleurs qu'en recherche", async () => {
+    const video = await videoAt("SCRIPT");
+    await blockVideo(deps, { videoId: video.id, reason: "x", actor: { kind: "system" } });
+    await resumeVideo(deps, { videoId: video.id, actor: human, researchSources: ["https://a.example"] });
+    expect(await db.video.findUniqueOrThrow({ where: { id: video.id } })).toMatchObject({ stage: "SCRIPT", researchSources: [] });
   });
 
   it("ne lance qu'une veille par semaine", async () => {

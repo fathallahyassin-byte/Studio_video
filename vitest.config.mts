@@ -10,6 +10,6 @@ export default defineConfig({
     // Les tests d'intégration partagent une base : un fichier à la fois quand elle est fournie.
     fileParallelism: !process.env.TEST_DATABASE_URL,
     include: ["**/*.test.ts"],
-    exclude: ["node_modules/**", ".next/**", "e2e/**"],
+    exclude: ["**/node_modules/**", "**/.next/**", ".claude/**", "e2e/**"],
   },
 });

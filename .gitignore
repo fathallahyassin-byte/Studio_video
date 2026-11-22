@@ -16,3 +16,4 @@ lib/generated/
 coverage/
 test-results/
 playwright-report/
+.claude/worktrees/

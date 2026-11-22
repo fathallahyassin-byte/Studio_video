@@ -1,6 +1,6 @@
 // Tests sur une vraie base migrée et seedée. Ignorés sans TEST_DATABASE_URL :
 //   TEST_DATABASE_URL="postgresql://studio:studio@localhost:5432/studio" npm run test
-import { PrismaPg } from "@prisma/adapter-pg";
+import { createTestDb } from "@/lib/testing/testDb";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { AgentDefinition } from "@/agents/_shared/types";
@@ -40,7 +40,7 @@ describe.skipIf(!url)("base réelle", () => {
   let originalModel = "";
 
   beforeAll(async () => {
-    db = new PrismaClient({ adapter: new PrismaPg({ connectionString: url ?? "" }) });
+    db = createTestDb(url ?? "");
     originalModel = (await db.agent.findUniqueOrThrow({ where: { id: 4 } })).model;
     await db.agent.update({ where: { id: 4 }, data: { model: "modele-test" } });
   });

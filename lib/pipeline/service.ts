@@ -186,6 +186,23 @@ export async function blockVideo(deps: PipelineDeps, input: { videoId: string; r
 }
 
 /**
+ * « Relancer l'étape » d'une vidéo à corriger. Pour une vidéo bloquée en recherche, enregistre d'abord
+ * les sources données par l'humain (lues par le recherchiste dans {{SOURCES}}).
+ */
+export async function resumeVideo(
+  deps: PipelineDeps,
+  input: { videoId: string; actor: Actor; note?: string | null; researchSources?: readonly string[] },
+): Promise<AppliedTransition> {
+  if (input.researchSources) {
+    const video = await deps.db.video.findUnique({ where: { id: input.videoId }, select: { stage: true, blockedAt: true } });
+    if (video?.stage === "NEEDS_FIX" && video.blockedAt === "RESEARCH") {
+      await deps.db.video.update({ where: { id: input.videoId }, data: { researchSources: [...input.researchSources] } });
+    }
+  }
+  return applyEvent(deps, { videoId: input.videoId, event: "RESUMED", actor: input.actor, note: input.note });
+}
+
+/**
  * Pour le onSuccess des agents : fait avancer la vidéo après leur livrable.
  * MEDIA_DONE n'avance qu'une fois le storyboard (agent 5) ET le plan sonore (agent 6) enregistrés.
  */

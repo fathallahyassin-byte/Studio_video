@@ -86,7 +86,7 @@ export type QueueDetail =
   | { kind: "ideas"; ideas: IdeaRow[] }
   | { kind: "script"; videoId: string; script: Script | null }
   | { kind: "qa"; videoId: string; report: QaReport | null; suggestedReturn: V3ReturnStage }
-  | { kind: "fix"; videoId: string; reason: string | null; blockedAt: Stage | null };
+  | { kind: "fix"; videoId: string; reason: string | null; blockedAt: Stage | null; sources: string[] };
 
 /** Étape où renvoyer la vidéo en V3, d'après l'agent responsable du premier point « ko ». */
 export function suggestReturnStage(report: QaReport | null): V3ReturnStage {
@@ -104,7 +104,7 @@ export async function getValidationData(db: PrismaClient, channelId: string) {
 export async function getQueueDetail(db: PrismaClient, item: QueueItem): Promise<QueueDetail> {
   const videos = await db.video.findMany({
     where: { id: { in: item.videoIds } },
-    select: { id: true, number: true, title: true, ideaJson: true, scriptJson: true, qaJson: true, blockedAt: true, blockedReason: true },
+    select: { id: true, number: true, title: true, ideaJson: true, scriptJson: true, qaJson: true, blockedAt: true, blockedReason: true, researchSources: true },
   });
   if (item.gate === "V1") {
     const ideas = videos.map((video): IdeaRow => {
@@ -116,7 +116,7 @@ export async function getQueueDetail(db: PrismaClient, item: QueueItem): Promise
   const video = videos[0];
   const videoId = video?.id ?? "";
   if (item.gate === "V2") return { kind: "script", videoId, script: parseScript(video?.scriptJson) };
-  if (item.gate === "FIX") return { kind: "fix", videoId, reason: video?.blockedReason ?? null, blockedAt: video?.blockedAt ?? null };
+  if (item.gate === "FIX") return { kind: "fix", videoId, reason: video?.blockedReason ?? null, blockedAt: video?.blockedAt ?? null, sources: video?.researchSources ?? [] };
   const report = parseQaReport(video?.qaJson);
   return { kind: "qa", videoId, report, suggestedReturn: suggestReturnStage(report) };
 }

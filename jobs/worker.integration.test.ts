@@ -1,5 +1,5 @@
 // Tests sur une vraie base migrée et seedée. Ignorés sans TEST_DATABASE_URL.
-import { PrismaPg } from "@prisma/adapter-pg";
+import { createTestDb } from "@/lib/testing/testDb";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { AgentJobInput, AnyAgentDefinition } from "@/agents/_shared/types";
@@ -20,7 +20,7 @@ describe.skipIf(!url)("worker sur base réelle", () => {
   let originalModel = "";
 
   beforeAll(async () => {
-    db = new PrismaClient({ adapter: new PrismaPg({ connectionString: url ?? "" }) });
+    db = createTestDb(url ?? "");
     originalModel = (await db.agent.findUniqueOrThrow({ where: { id: 4 } })).model;
     await db.agent.update({ where: { id: 4 }, data: { model: "modele-test" } });
   });
@@ -136,7 +136,8 @@ describe.skipIf(!url)("worker sur base réelle", () => {
     expect(await claimNextJob(db)).toMatchObject({ id: ids[0], attempts: 2 });
   });
 
-  it("planifie l'analyse et la veille une seule fois par semaine", async () => {
+  // Parcourt toutes les chaînes de la base de test (une par test d'intégration) : délai large.
+  it("planifie l'analyse et la veille une seule fois par semaine", { timeout: 60_000 }, async () => {
     const monday = new Date(2026, 11, 7, 7, 30);
     const first = await enqueueDueTasks(pipeline(), monday);
     const second = await enqueueDueTasks(pipeline(), new Date(2026, 11, 9, 12));

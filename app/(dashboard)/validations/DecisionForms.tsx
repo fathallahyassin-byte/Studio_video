@@ -64,10 +64,28 @@ export function VideoDecisionForm({ videoId, gate, suggestedReturn }: { videoId:
   );
 }
 
-export function FixForm({ videoId }: { videoId: string }) {
+/** `sources` : présent seulement pour une vidéo bloquée en recherche (liens donnés au recherchiste). */
+export function FixForm({ videoId, sources }: { videoId: string; sources?: readonly string[] }) {
   const { state, pending, onSubmit } = useKeptForm<DecisionState>(resolveFixAction.bind(null, videoId), null);
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-5">
+      {sources ? (
+        <div className="flex flex-col gap-1.5">
+          <FieldLabel htmlFor="sources">Sources pour le recherchiste (une adresse par ligne)</FieldLabel>
+          <textarea
+            id="sources"
+            name="sources"
+            defaultValue={sources.join("\n")}
+            aria-describedby="sources-hint"
+            spellCheck={false}
+            className={`${fieldClass} min-h-28 resize-y font-mono text-[13px]`}
+            placeholder="https://…"
+          />
+          <p id="sources-hint" className="text-[13px] text-muted">
+            Sans source fournie, le recherchiste n&apos;invente aucune adresse : ses faits restent « faibles ». Ajoute des liens fiables avant de relancer.
+          </p>
+        </div>
+      ) : null}
       <NoteField hint="Ex. : nouvel angle à creuser, source à utiliser" />
       <FormMessage state={state} />
       <Actions pending={pending} approveIntent="resume" approveLabel="Relancer l'étape" secondaryLabel="Abandonner la vidéo" secondaryIntent="abandon" />

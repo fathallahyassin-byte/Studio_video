@@ -1,6 +1,10 @@
 # Besoins de l'agent 3 hors de son dossier
 
-## 1. Saisir les sources de l'humain pour `{{SOURCES}}` (prioritaire)
+## 1. Saisir les sources de l'humain pour `{{SOURCES}}` : FAIT (session principale)
+
+- **Intégré** : champ `Video.researchSources` (migration `20261122170000_research_sources`), saisie dans « À valider » pour une vidéo bloquée en recherche (une URL http(s) par ligne, enregistrées avant « Relancer l'étape »), et `loadHumanSources` dans `ports.ts` lit ce champ.
+
+### Demande d'origine
 
 - **Quoi** : un champ pour stocker les liens que j'ajoute à une vidéo, par exemple `Video.researchSources String[] @default([])` (ou un modèle `VideoSource { id, videoId, url, note, createdAt }`), et un petit formulaire pour les ajouter : sur la carte de la vidéo en Production, ou dans le détail d'une vidéo bloquée dans Validations. Chaque URL est validée par Zod (http ou https uniquement).
 - **Pourquoi** : `AGENT.md` prévoit « liens que j'ajoute sur la page de la vidéo », mais aucun champ n'existe. Pour l'instant `{{SOURCES}}` vaut toujours « aucune source fournie » (`ports.ts`, `loadHumanSources` renvoie `[]`).

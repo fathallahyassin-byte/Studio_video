@@ -6,7 +6,8 @@ import { z } from "zod";
 import { requireOwner } from "@/lib/auth/owner";
 import { getPipelineDeps, ownerActor } from "@/lib/pipeline/deps";
 import { V3_RETURN_STAGES } from "@/lib/pipeline/machine";
-import { applyEvent, decideIdeas, TransitionError } from "@/lib/pipeline/service";
+import { applyEvent, decideIdeas, resumeVideo, TransitionError } from "@/lib/pipeline/service";
+import { parseSourceLines } from "@/lib/videos/sources";
 import type { DoneCode } from "./messages";
 
 export type DecisionState = { ok: boolean; message: string } | null;
@@ -67,13 +68,25 @@ export async function decideVideoAction(videoId: string, gate: "V2" | "V3", _pre
 
 const fixSchema = z.object({ intent: z.enum(["resume", "abandon"]), note });
 
-/** Vidéo à corriger : relancer l'étape bloquée, ou abandonner la vidéo. */
+/**
+ * Vidéo à corriger : relancer l'étape bloquée, ou abandonner la vidéo.
+ * Pour une vidéo bloquée en recherche, les sources saisies sont enregistrées avant la relance.
+ */
 export async function resolveFixAction(videoId: string, _previous: DecisionState, formData: FormData): Promise<DecisionState> {
   const parsed = fixSchema.safeParse({ intent: formData.get("intent"), note: formData.get("note") ?? undefined });
   if (!parsed.success) return { ok: false, message: "Choisis « Relancer l'étape » ou « Abandonner la vidéo »." };
+  const resume = parsed.data.intent === "resume";
+  const rawSources = formData.get("sources");
+  const sources = resume && typeof rawSources === "string" ? parseSourceLines(rawSources) : null;
+  if (sources && !sources.ok) return { ok: false, message: sources.error };
   return guard(async () => {
-    const resume = parsed.data.intent === "resume";
-    await applyEvent(getPipelineDeps(), { videoId, event: resume ? "RESUMED" : "ABANDONED", actor: ownerActor(), note: parsed.data.note || null });
-    return resume ? "resumed" : "abandoned";
+    const deps = getPipelineDeps();
+    const note = parsed.data.note || null;
+    if (!resume) {
+      await applyEvent(deps, { videoId, event: "ABANDONED", actor: ownerActor(), note });
+      return "abandoned";
+    }
+    await resumeVideo(deps, { videoId, actor: ownerActor(), note, researchSources: sources?.ok ? sources.urls : undefined });
+    return "resumed";
   });
 }

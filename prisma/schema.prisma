@@ -193,6 +193,9 @@ model Video {
   /// Lu par le contrôle qualité (agent 8)
   partnership String @default("aucun")
 
+  /// Liens ajoutés par l'humain pour le recherchiste (agent 3, {{SOURCES}}) ; http(s) uniquement
+  researchSources String[] @default([])
+
   ideaJson       Json?
   dossierJson    Json?
   scriptJson     Json?
