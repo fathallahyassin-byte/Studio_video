@@ -1,37 +1,30 @@
 # Besoins de l'agent 1 hors de son dossier
 
-## 1. Mettre une tâche de l'agent 1 en file depuis `lib/pipeline`
+## 1. Mettre une tâche de l'agent 1 en file depuis `lib/pipeline` : FAIT
 
-- **Demande** : ajouter à `lib/pipeline/service.ts` une fonction publique, par exemple
-  `requestStrategy(deps, { channelId, jobKey, payload })`, qui crée une `AgentJob` (`kind: "AGENT"`, `agentId: 1`, `videoId: null`, `payload`) et renvoie `{ queued: false }` sur un conflit de `jobKey` (P2002), comme `requestWeekly`.
-- **Pourquoi** : `requestWeekly` est privée, ne prend pas de payload et impose une clé par semaine ISO. L'agent 1 a besoin du formulaire en payload et d'une clé par formulaire (`strategie:<chaîne>:<jour>:<empreinte du formulaire>`, voir `launch.ts`).
-- **Repli en place** : `createPrismaLaunchPorts().enqueueStrategy` (`ports.ts`) crée la ligne `AgentJob` lui-même. Ce n'est pas un contournement : la ligne `AgentJob` est la file, le worker la prend comme les autres. Une fois la fonction ajoutée, il suffit que ce port l'appelle.
+- **Intégré** : `requestStrategy(deps, { channelId, jobKey, payload })` dans `lib/pipeline/service.ts` crée la tâche `AGENT` de l'agent 1 (sans vidéo, formulaire en payload) et renvoie `{ queued: false }` si la clé existe déjà. `requestWeekly` (veille, analyse) passe par la même fonction interne. `createPrismaLaunchPorts().enqueueStrategy` (`ports.ts`) l'appelle.
+- **Pourquoi** : `requestWeekly` était privée, sans payload, avec une clé par semaine ISO ; l'agent 1 a une clé par formulaire (`strategie:<chaîne>:<jour>:<empreinte>`, `launch.ts`).
 
-## 2. Partager l'activation d'une bible avec l'écran Bible
+## 2. Partager l'activation d'une bible avec l'écran Bible : FAIT
 
-- **Demande** : extraire de `app/(dashboard)/bible/actions.ts` (`activateBibleVersion`) une fonction `activateBibleVersion(db, { channelId, versionId })` dans `lib/bible/store.ts`, qui ne fait que déplacer `Channel.activeBibleVersionId` (et recopier `chaine.niche` dans `Channel.niche`).
-- **Pourquoi** : « Adopter cette bible » (page de l'agent 1) et « Remettre en service » (écran Bible) font la même écriture. Le fork ne peut pas importer proprement une Server Action d'`app/`, qui appelle elle-même `requireOwner` et `revalidatePath`.
-- **Repli en place** : `createPrismaAdoptionPorts().activateBible` (`ports.ts`) refait la même mise à jour de `Channel`. Aucune `BibleVersion` n'est modifiée.
+- **Intégré** : `activateBibleVersion(db, { channelId, versionId })` dans `lib/bible/store.ts` (pointeur `Channel.activeBibleVersionId` et `Channel.niche`, aucune `BibleVersion` modifiée). L'écran Bible (« Remettre en service ») et « Adopter cette bible » (`createPrismaAdoptionPorts().activateBible`) l'appellent tous les deux.
 
-## 3. Relier un brouillon à sa tâche par une colonne
+## 3. Relier un brouillon à sa tâche par une colonne : FAIT
 
-- **Demande** : ajouter `BibleVersion.sourceJobId String? @unique` (id de l'`AgentJob` qui a produit la version, null pour les versions humaines).
-- **Pourquoi** : l'idempotence d'`onSuccess` (un seul brouillon par tâche, même rejoué après un crash) repose aujourd'hui sur la note du brouillon, qui se termine par `(tâche <jobId>)` (`draft.ts`, `draftMarker` dans `ports.ts`). Une colonne unique la garantirait en base, même avec deux workers, et simplifierait la lecture du panneau (`ui/loadStrategy.ts` retrouve la tâche par la `jobKey` de l'AgentRun, puis le brouillon par la note).
-- **Repli en place** : la note. Le numéro de version est calculé dans une transaction et `@@unique([channelId, version])` refuse un doublon simultané.
+- **Intégré** : `BibleVersion.sourceJobId String? @unique` (migration `20261123120000_strategist_needs`). `onSuccess` enregistre l'id de la tâche dans le brouillon et le retrouve par cette colonne à la reprise ; la note du brouillon ne sert plus qu'à l'affichage (« Proposée par le stratège de niche : « … » »).
+- **Pourquoi** : l'idempotence reposait sur la fin de la note ; la contrainte unique la garantit en base, même avec deux workers.
 
-## 4. Rappel mensuel
+## 4. Rappel mensuel : FAIT
 
-- **Demande** : dans le planning du worker (`jobs/`), le 1ᵉʳ de chaque mois, une notification « Relancer l'analyse des niches » avec le lien `/agents/01-strategiste-niche`. Pas de tâche automatique : le formulaire (pistes, temps, budget, objectif) doit être relu par l'humain avant chaque analyse.
-- **Pourquoi** : AGENT.md prévoit un déclenchement manuel « au lancement, puis une fois par mois ». Le formulaire de la page reprend les réponses de la dernière analyse : relancer prend un clic.
+- **Intégré** : `sendDueReminders` (`jobs/schedule.ts`), appelé par le worker avec le planning : le 1ᵉʳ du mois à partir de 9 h (rattrapé le reste du mois), une notification `reminder` « Analyse des niches du mois » avec le lien vers la page de l'agent 1. Rien si l'agent 1 est désactivé ou si une analyse a déjà été lancée dans le mois. Une ligne `Reminder` (clé `strategie:<chaîne>:<AAAA-MM>`) est écrite avant l'envoi : un redémarrage ne renvoie jamais le rappel. Pas de tâche automatique : le formulaire est relu par l'humain.
 
-## 5. Payload invalide : ne pas réessayer toutes les heures
+## 5. Payload invalide : ne pas réessayer toutes les heures : FAIT
 
-- **Demande** : distinguer dans `jobs/handlers.ts` une erreur d'entrée définitive (par exemple une sous-classe `AgentInputError` d'`AgentPreconditionError`) qui termine la tâche en `FAILED` avec une alerte, au lieu de la remettre en file toutes les heures.
-- **Pourquoi** : un payload refusé par Zod (`payload.ts`, `readStrategyPayload`) ne deviendra jamais valide. Aujourd'hui, `AgentPreconditionError` → nouvel essai dans 1 h, sans fin. Priorité faible : la Server Action valide le formulaire avec le même schéma avant la mise en file, ce cas ne vient que d'une tâche créée à la main.
+- **Intégré** : `AgentInputError` (`lib/agents/errors.ts`, sous-classe d'`AgentPreconditionError`). `jobs/handlers.ts` (`classifyError`) termine la tâche en `FAILED` et alerte l'humain au lieu de la remettre en file. `readStrategyPayload` (`payload.ts`) la lève.
 
 ## À savoir (rien à faire)
 
-- **Notification du brouillon** : à la création du brouillon, `onSuccess` envoie une notification `validation_waiting` (« Bible proposée : à adopter », lien vers la page de l'agent). Elle n'est pas renvoyée quand `onSuccess` est rejoué. Un type dédié (`bible_draft`) serait plus juste si les notifications sont un jour filtrées par type.
+- **Notification du brouillon** : à la création du brouillon, `onSuccess` envoie une notification `validation_waiting` (« Bible proposée : à adopter », lien vers la page de l'agent). Elle n'est pas renvoyée quand `onSuccess` est rejoué.
 - **Contrôles en code ajoutés**, tous tirés du prompt : niches uniques avec public et angle ; 12 candidates si moins de 8 pistes ; une justification par note ; top 3 = les 3 meilleurs scores recalculés (égalité avec le 3ᵉ acceptée) ; 10 titres distincts et 3 comptes ou formats à étudier par niche du top 3 ; niche recommandée dans le top 3, avec une raison et au moins un risque ; plan de test de 20 vidéos en 4 semaines avec un critère chiffré ; bible lisible par `checkBible`, sans `{{…}}` restant, avec toutes les clés du modèle sur deux niveaux (`chaine`, `chaine.nom`…). Les notes hors de 1 à 5 sont déjà refusées par `schema.ts`.
 - **`{{CONTRAINTES}}`** ajoute « Langue : français (fr-FR) » : le prompt la cite parmi les contraintes et le modèle de bible fixe `langue: fr-FR`. Le formulaire n'a pas de champ « centres d'intérêt » (AGENT.md ne le demande pas) : les pistes en tiennent lieu.
 - **Adoption** : la nouvelle `BibleVersion` est créée par `onSuccess` (brouillon, auteur `AGENT_1`, non active) ; « Adopter cette bible » ne fait que déplacer le pointeur de la chaîne, après avoir vérifié que la version est un brouillon de l'agent 1 de la même chaîne, lisible et sans `{{…}}`. L'écran Bible montre déjà ces brouillons avec un bouton « Adopter cette bible ».

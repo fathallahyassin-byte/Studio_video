@@ -165,15 +165,33 @@ export function isoWeek(date: Date): string {
   return `${day.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
-async function requestWeekly(deps: PipelineDeps, input: { channelId: string; now: Date; agentId: AgentId; prefix: string }): Promise<{ queued: boolean; week: string }> {
-  const week = isoWeek(input.now);
+/** Tâche d'agent sans vidéo. false si une tâche de même clé existe déjà (idempotence). */
+async function enqueueChannelJob(
+  deps: PipelineDeps,
+  data: { jobKey: string; channelId: string; agentId: AgentId; payload?: Prisma.InputJsonValue },
+): Promise<boolean> {
   try {
-    await deps.db.agentJob.create({ data: { jobKey: `${input.prefix}:${input.channelId}:${week}`, kind: "AGENT", agentId: input.agentId, channelId: input.channelId } });
-    return { queued: true, week };
+    await deps.db.agentJob.create({ data: { ...data, kind: "AGENT" } });
+    return true;
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return { queued: false, week };
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return false;
     throw error;
   }
+}
+
+async function requestWeekly(deps: PipelineDeps, input: { channelId: string; now: Date; agentId: AgentId; prefix: string }): Promise<{ queued: boolean; week: string }> {
+  const week = isoWeek(input.now);
+  const queued = await enqueueChannelJob(deps, { jobKey: `${input.prefix}:${input.channelId}:${week}`, agentId: input.agentId, channelId: input.channelId });
+  return { queued, week };
+}
+
+/**
+ * « Lancer l'analyse des niches » (agent 1, page de l'agent) : le formulaire part dans le payload.
+ * La clé est choisie par l'appelant (même formulaire le même jour = même clé = une seule tâche).
+ */
+export async function requestStrategy(deps: PipelineDeps, input: { channelId: string; jobKey: string; payload: unknown }): Promise<{ queued: boolean }> {
+  const queued = await enqueueChannelJob(deps, { jobKey: input.jobKey, agentId: 1, channelId: input.channelId, payload: toInputJson(input.payload) });
+  return { queued };
 }
 
 /** « Lancer la veille » et le planning du lundi : une seule veille (agent 2) par semaine. */

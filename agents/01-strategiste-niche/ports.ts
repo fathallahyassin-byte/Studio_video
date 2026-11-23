@@ -1,8 +1,10 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { activateBibleVersion } from "@/lib/bible/store";
 import { getDb } from "@/lib/db";
-import { Prisma, type BibleAuthor, type PrismaClient } from "@/lib/generated/prisma/client";
-import { toInputJson } from "@/lib/json";
+import type { BibleAuthor, PrismaClient } from "@/lib/generated/prisma/client";
+import { getPipelineDeps } from "@/lib/pipeline/deps";
+import { requestStrategy } from "@/lib/pipeline/service";
 import { getNotifier } from "@/lib/providers/notify";
 import type { StrategyPayload } from "./payload";
 
@@ -22,8 +24,8 @@ export type StrategyPorts = {
   readBibleTemplate(): Promise<string>;
   /** brouillon déjà créé pour cette tâche (reprise après un crash), sinon null */
   findDraftForJob(channelId: string, jobId: string): Promise<DraftRef | null>;
-  /** nouvelle BibleVersion (auteur agent 1), jamais active à la création */
-  createDraft(input: { channelId: string; content: string; note: string }): Promise<DraftRef>;
+  /** nouvelle BibleVersion (auteur agent 1, sourceJobId = la tâche), jamais active à la création */
+  createDraft(input: { channelId: string; jobId: string; content: string; note: string }): Promise<DraftRef>;
   notifyDraft(input: { draft: DraftRef; niche: string }): Promise<void>;
 };
 
@@ -32,7 +34,7 @@ export type AdoptionPorts = {
   loadBibleVersion(versionId: string): Promise<StoredBibleVersion | null>;
   loadActiveBibleId(channelId: string): Promise<string | null>;
   /** déplace le pointeur Channel.activeBibleVersionId (et la niche affichée) */
-  activateBible(input: { channelId: string; versionId: string; niche: string }): Promise<void>;
+  activateBible(input: { channelId: string; versionId: string }): Promise<void>;
 };
 
 /** Ce dont le lancement depuis la page a besoin. */
@@ -45,11 +47,6 @@ export type LaunchPorts = {
 
 export const DRAFT_AUTHOR: BibleAuthor = "AGENT_1";
 
-/** Suffixe de la note du brouillon : retrouve le brouillon d'une tâche sans champ dédié en base. */
-export function draftMarker(jobId: string): string {
-  return `(tâche ${jobId})`;
-}
-
 export async function readBibleTemplateFile(): Promise<string> {
   const template = await readFile(path.join(process.cwd(), "docs", "bible.template.yaml"), "utf8");
   return template.replace(/\r\n/g, "\n");
@@ -57,18 +54,20 @@ export async function readBibleTemplateFile(): Promise<string> {
 
 export async function findDraftForJob(db: PrismaClient, channelId: string, jobId: string): Promise<DraftRef | null> {
   return db.bibleVersion.findFirst({
-    where: { channelId, author: DRAFT_AUTHOR, note: { endsWith: draftMarker(jobId) } },
-    orderBy: { version: "asc" },
+    where: { channelId, sourceJobId: jobId },
     select: { id: true, version: true },
   });
 }
 
-/** Numéro suivant et création dans une transaction ; @@unique([channelId, version]) refuse un doublon simultané. */
-async function createDraft(db: PrismaClient, input: { channelId: string; content: string; note: string }): Promise<DraftRef> {
+/**
+ * Numéro suivant et création dans une transaction. Doublon simultané : sourceJobId et (channelId, version)
+ * sont uniques, la création échoue et la reprise retrouve le brouillon par findDraftForJob.
+ */
+async function createDraft(db: PrismaClient, input: { channelId: string; jobId: string; content: string; note: string }): Promise<DraftRef> {
   return db.$transaction(async (tx) => {
     const last = await tx.bibleVersion.aggregate({ where: { channelId: input.channelId }, _max: { version: true } });
     return tx.bibleVersion.create({
-      data: { channelId: input.channelId, version: (last._max.version ?? 0) + 1, content: input.content, author: DRAFT_AUTHOR, note: input.note },
+      data: { channelId: input.channelId, version: (last._max.version ?? 0) + 1, content: input.content, author: DRAFT_AUTHOR, note: input.note, sourceJobId: input.jobId },
       select: { id: true, version: true },
     });
   });
@@ -98,9 +97,9 @@ export function createPrismaAdoptionPorts(db: PrismaClient = getDb()): AdoptionP
       const channel = await db.channel.findUnique({ where: { id: channelId }, select: { activeBibleVersionId: true } });
       return channel?.activeBibleVersionId ?? null;
     },
-    // Même écriture que « Remettre en service » sur l'écran Bible (voir NEEDS.md : à partager dans lib/bible).
-    async activateBible({ channelId, versionId, niche }) {
-      await db.channel.update({ where: { id: channelId }, data: { activeBibleVersionId: versionId, niche } });
+    // Même écriture que « Remettre en service » sur l'écran Bible.
+    async activateBible(input) {
+      await activateBibleVersion(db, input);
     },
   };
 }
@@ -111,15 +110,9 @@ export function createPrismaLaunchPorts(db: PrismaClient = getDb()): LaunchPorts
       const pending = await db.agentJob.count({ where: { channelId, agentId: AGENT_ID, status: { in: ["QUEUED", "RUNNING"] } } });
       return pending > 0;
     },
-    // Repli en attendant une fonction de lib/pipeline (NEEDS.md) : la ligne AgentJob EST la file.
-    async enqueueStrategy({ jobKey, channelId, payload }) {
-      try {
-        await db.agentJob.create({ data: { jobKey, kind: "AGENT", agentId: AGENT_ID, channelId, payload: toInputJson(payload) } });
-        return true;
-      } catch (error) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return false;
-        throw error;
-      }
+    async enqueueStrategy(input) {
+      const { queued } = await requestStrategy({ ...getPipelineDeps(), db }, input);
+      return queued;
     },
   };
 }

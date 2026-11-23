@@ -7,7 +7,7 @@ import { getConfiguredLlmProvider } from "@/lib/providers/llmConfig";
 import { getNotifier } from "@/lib/providers/notify";
 import { getRenderProvider } from "@/lib/render/localRenderer";
 import { processNextJob, type JobDeps } from "./handlers";
-import { enqueueDueTasks } from "./schedule";
+import { enqueueDueTasks, sendDueReminders } from "./schedule";
 
 loadEnvConfig(process.cwd());
 
@@ -39,6 +39,8 @@ async function housekeeping(deps: JobDeps): Promise<void> {
   if (requeued > 0) console.log(`[worker] ${requeued} tâche(s) abandonnée(s) remise(s) en file`);
   const planned = await enqueueDueTasks(deps, new Date());
   if (planned.length > 0) console.log(`[worker] planifié : ${planned.join(", ")}`);
+  const reminders = await sendDueReminders(deps, new Date());
+  if (reminders.length > 0) console.log(`[worker] rappel envoyé : ${reminders.join(", ")}`);
 }
 
 async function main(): Promise<void> {

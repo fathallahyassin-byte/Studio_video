@@ -20,6 +20,6 @@ export async function adoptDraft(ports: AdoptionPorts, input: { channelId: strin
   if ((await ports.loadActiveBibleId(input.channelId)) === version.id) {
     return { ok: true, message: `La bible v${version.version} est déjà active.`, changed: false };
   }
-  await ports.activateBible({ channelId: input.channelId, versionId: version.id, niche: check.fields.niche });
+  await ports.activateBible({ channelId: input.channelId, versionId: version.id });
   return { ok: true, message: `Bible v${version.version} adoptée : les agents l'utiliseront dès la prochaine tâche.`, changed: true };
 }

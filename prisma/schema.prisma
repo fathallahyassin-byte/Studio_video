@@ -120,19 +120,30 @@ model Channel {
   jobs          AgentJob[]
   reports       AnalystReport[]
   experiments   Experiment[]
+  reminders     Reminder[]
   createdAt     DateTime        @default(now())
+}
+
+/// Rappels envoyés par le planning du worker. La clé (ex. strategie:<chaîne>:2026-12) rend chaque envoi unique, même après un redémarrage.
+model Reminder {
+  key       String   @id
+  channelId String
+  channel   Channel  @relation(fields: [channelId], references: [id])
+  createdAt DateTime @default(now())
 }
 
 /// Immuable : chaque enregistrement crée une nouvelle version, on ne modifie ni ne supprime jamais une version.
 model BibleVersion {
-  id        String      @id @default(cuid())
-  channelId String
-  channel   Channel     @relation("ChannelBibles", fields: [channelId], references: [id])
-  version   Int
-  content   String
-  author    BibleAuthor
-  note      String?
-  createdAt DateTime    @default(now())
+  id          String      @id @default(cuid())
+  channelId   String
+  channel     Channel     @relation("ChannelBibles", fields: [channelId], references: [id])
+  version     Int
+  content     String
+  author      BibleAuthor
+  note        String?
+  /// AgentJob qui a produit la version (brouillon de l'agent 1) ; null pour les autres. Une seule version par tâche.
+  sourceJobId String?     @unique
+  createdAt   DateTime    @default(now())
 
   activeFor Channel?   @relation("ActiveBible")
   agentRuns AgentRun[]
