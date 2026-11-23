@@ -1,6 +1,7 @@
 import type { Stage } from "@/lib/generated/prisma/client";
 import { parseStoredAudioPlan, type AudioPlan, type TrackJson } from "./audioPlan";
 import { hasLicense } from "./music";
+import type { EditRestart } from "@/lib/pipeline/service";
 import { MANUAL_PROVIDER, type AudioPorts, type AudioVideo } from "./ports";
 import { checkTtsText, durationVerdict, roundTenth, spokenWords } from "./rules";
 import { parseAmount, ttsTagNames } from "./variables";
@@ -49,7 +50,8 @@ export async function regenerateVoice(ports: AudioPorts, input: { videoId: strin
   if (outcome.status === "stopped") return { ok: false, message: "La vidéo a changé d'étape : régénération annulée." };
   if (outcome.status !== "done") return { ok: false, message: capitalize(voiceRefusal(outcome)) };
   await ports.saveAudioPlan(input.videoId, withVoice(plan, text, outcome, attempt));
-  return { ok: true, message: regeneratedMessage(plan, outcome.voice.durationS, attempt) };
+  const restart = await ports.soundChanged(input.videoId);
+  return { ok: true, message: `${regeneratedMessage(plan, outcome.voice.durationS, attempt)}${restartNote(restart)}` };
 }
 
 function withVoice(plan: AudioPlan, text: string, outcome: Extract<VoiceOutcome, { status: "done" }>, attempt: number): AudioPlan {
@@ -84,6 +86,13 @@ function regeneratedMessage(plan: AudioPlan, durationS: number, attempt: number)
   return `Voix régénérée (tentative ${attempt}) : ${duration}, hors de la cible de ${minS} à ${maxS} s. Ajuste le texte et régénère.`;
 }
 
+/** Au montage, une timeline déjà produite gardait l'ancien son : elle est refaite. */
+function restartNote(restart: EditRestart): string {
+  if (restart === "restarted") return " Le montage est relancé avec ce son.";
+  if (restart === "cleared") return " La timeline est effacée : relance l'étape pour refaire le montage.";
+  return "";
+}
+
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
@@ -101,5 +110,6 @@ export async function chooseMusic(ports: AudioPorts, input: MusicChoice): Promis
   const plan = parseStoredAudioPlan(video.audio);
   if (!plan) return { ok: true, message: `Piste « ${track.titre} » enregistrée. Relance l'étape pour terminer le plan sonore : elle sera utilisée.` };
   await ports.saveAudioPlan(input.videoId, { ...plan, production: { ...plan.production, musique: track } });
-  return { ok: true, message: `Piste « ${track.titre} » enregistrée dans le plan sonore.` };
+  const restart = await ports.soundChanged(input.videoId);
+  return { ok: true, message: `Piste « ${track.titre} » enregistrée dans le plan sonore.${restartNote(restart)}` };
 }

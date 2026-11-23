@@ -276,7 +276,7 @@ export type FakeAudioPorts = {
   video: AudioVideo;
   voices: FakeVoiceStore;
   music: FakeMusicStore;
-  calls: { saved: unknown[]; completed: number; blocked: string[] };
+  calls: { saved: unknown[]; completed: number; blocked: string[]; soundChanged: number };
 };
 
 /** Vidéo en mémoire : les transitions changent l'étape comme lib/pipeline (MEDIA_DONE attend aussi le storyboard). */
@@ -284,7 +284,7 @@ export function makePorts(options: PortOptions = {}): FakeAudioPorts {
   const video: AudioVideo = { stage: options.stage ?? "VISUALS_AND_AUDIO", blockedAt: null, script: makeScript(), storyboard: null, audio: null, totalCost: 0.2, ...options.video };
   const voices = makeVoiceStore(video);
   const music = makeMusicStore(options.manual ?? null, video);
-  const calls = { saved: [] as unknown[], completed: 0, blocked: [] as string[] };
+  const calls = { saved: [] as unknown[], completed: 0, blocked: [] as string[], soundChanged: 0 };
   const ports: AudioPorts = {
     async loadVideo() {
       return options.exists === false ? null : { ...video };
@@ -305,6 +305,11 @@ export function makePorts(options: PortOptions = {}): FakeAudioPorts {
       calls.blocked.push(reason);
       video.blockedAt = video.stage;
       video.stage = "NEEDS_FIX";
+    },
+    async soundChanged() {
+      calls.soundChanged += 1;
+      if (video.stage === "EDIT") return "restarted";
+      return video.stage === "NEEDS_FIX" && video.blockedAt === "EDIT" ? "cleared" : "none";
     },
     budgets: () => ({ perVideo: "perVideo" in options ? options.perVideo : "5" }),
     tools: {

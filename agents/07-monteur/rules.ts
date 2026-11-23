@@ -96,7 +96,6 @@ export function missingMediaAlert(planIds: readonly string[]): string {
 }
 
 export const NO_MUSIC_ALERT = "Aucune musique sous licence enregistrée : montage sans musique.";
-export const UNMEASURED_VOICE_ALERT = "Durée de la voix non mesurée : déduite de la fin du dernier mot.";
 
 function codeAlerts(output: Output, normalized: Output, context: EditContext): string[] {
   const missing = missingPlanIds(normalized);
@@ -106,7 +105,6 @@ function codeAlerts(output: Output, normalized: Output, context: EditContext): s
     missing.length > 0 ? missingMediaAlert(missing) : null,
     context.music ? null : NO_MUSIC_ALERT,
     effects > 0 ? `${effects} effet(s) sonore(s) du plan sonore non placé(s) : aucun fichier d'effet n'est disponible.` : null,
-    context.voice.measured ? null : UNMEASURED_VOICE_ALERT,
     changed
       ? `Durée ramenée en code de ${seconds(output.duree_totale_s)} s à ${seconds(normalized.duree_totale_s)} s (dernier mot à ${seconds(context.lastWordEndS)} s, fin au plus ${MAX_TAIL_S} s après).`
       : null,

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { outputSchema as storyboardSchema } from "@/agents/05-directeur-artistique/schema";
+import { parseStoredAudioPlan } from "@/agents/06-voix-son/audioPlan";
 import { outputSchema as audioPlanSchema } from "@/agents/06-voix-son/schema";
 import { AgentPreconditionError } from "@/lib/agents/errors";
 import type { WordTiming } from "@/lib/providers/media";
@@ -46,7 +47,7 @@ export type EditContext = {
   /** plans du storyboard, dans l'ordre du temps */
   plans: StoryboardPlan[];
   audioPlan: AudioPlan;
-  voice: { url: string; durationS: number; measured: boolean };
+  voice: { url: string; durationS: number };
   /** horodatage nettoyé : base des sous-titres */
   words: SpokenWord[];
   lastWordEndS: number;
@@ -64,24 +65,6 @@ function readOptional<T>(schema: z.ZodType<T>, value: unknown): Optional<T> {
 // Livrable audio de l'agent 6 : SEULE fonction qui connaît le format de son bloc « production ».
 // ---------------------------------------------------------------------------
 
-/**
- * Bloc « production » que le fork de l'agent 6 écrit dans Video.audioJson à côté de la sortie du modèle
- * (voix générée, durée mesurée, horodatage mot à mot, musique sous licence). Absent de `main` aujourd'hui :
- * lu de façon tolérante, et les Asset VOICE / MUSIC servent de secours. Voir NEEDS.md.
- */
-const productionSchema = z.object({
-  production: z.object({
-    voix: z
-      .object({
-        url: z.string().trim().min(1),
-        duree_s: z.number().nonnegative().optional(),
-        mots: z.array(z.object({ word: z.string(), startS: z.number(), endS: z.number() })).optional(),
-      })
-      .optional(),
-    musique: z.object({ url: z.string().trim().min(1), licence: z.string() }).optional(),
-  }),
-});
-
 function latestOfType(assets: readonly EditAsset[], type: EditAsset["type"]): EditAsset | null {
   return assets.find((asset) => asset.type === type && asset.url.trim() !== "") ?? null;
 }
@@ -91,18 +74,23 @@ function licensed(url: string, license: string | null): MusicSource | null {
   return trimmed === "" ? null : { url, license: trimmed };
 }
 
+/**
+ * Bloc « production » que l'agent 6 écrit dans Video.audioJson à côté de la sortie du modèle (voix générée,
+ * durée mesurée, horodatage mot à mot, musique sous licence : `agents/06-voix-son/audioPlan.ts`).
+ * Sans ce bloc (plan sonore incomplet), les Asset VOICE / MUSIC servent de secours, sans horodatage.
+ */
 export function readAudioDeliverable(audioJson: unknown, assets: readonly EditAsset[]): AudioDeliverable {
-  const parsed = productionSchema.safeParse(audioJson);
-  const production = parsed.success ? parsed.data.production : null;
+  const production = parseStoredAudioPlan(audioJson)?.production ?? null;
   const voiceAsset = latestOfType(assets, "VOICE");
   const musicAsset = latestOfType(assets, "MUSIC");
 
-  const voiceUrl = production?.voix?.url ?? voiceAsset?.url ?? null;
-  const voice: VoiceSource | null =
-    voiceUrl === null ? null : { url: voiceUrl, measuredS: production?.voix?.duree_s ?? voiceAsset?.durationS ?? null, words: production?.voix?.mots ?? null };
   // Une musique sans licence n'est jamais utilisée (CLAUDE.md §8).
-  const music = production?.musique ? licensed(production.musique.url, production.musique.licence) : musicAsset ? licensed(musicAsset.url, musicAsset.license) : null;
-  return { voice, music };
+  if (production) {
+    const { voix, musique } = production;
+    return { voice: { url: voix.url, measuredS: voix.duree_s, words: voix.mots }, music: licensed(musique.url, musique.licence) };
+  }
+  const voice: VoiceSource | null = voiceAsset ? { url: voiceAsset.url, measuredS: voiceAsset.durationS, words: null } : null;
+  return { voice, music: musicAsset ? licensed(musicAsset.url, musicAsset.license) : null };
 }
 
 // ---------------------------------------------------------------------------
@@ -181,7 +169,7 @@ export function requireEditContext(sources: EditSources): EditContext {
     ideaId: storyboard.value.idee_id,
     plans: [...storyboard.value.plans].sort((a, b) => a.debut_s - b.debut_s),
     audioPlan: audio.value,
-    voice: { url: voice.url, durationS: voice.measuredS ?? lastWordEndS, measured: voice.measuredS !== null },
+    voice: { url: voice.url, durationS: voice.measuredS ?? lastWordEndS },
     words,
     lastWordEndS,
     music: sources.music,

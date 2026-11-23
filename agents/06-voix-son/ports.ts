@@ -2,7 +2,7 @@ import { getDb } from "@/lib/db";
 import type { Stage } from "@/lib/generated/prisma/client";
 import { toInputJson } from "@/lib/json";
 import { getPipelineDeps } from "@/lib/pipeline/deps";
-import { blockVideo, completeStage, type Actor } from "@/lib/pipeline/service";
+import { blockVideo, completeStage, restartEdit, type Actor, type EditRestart } from "@/lib/pipeline/service";
 import { parseStoredOutput, type AudioPlan, type TrackJson } from "./audioPlan";
 import { assertLicensed, type MusicLibrary, type MusicStore } from "./music";
 import type { Output } from "./schema";
@@ -32,6 +32,8 @@ export type AudioPorts = {
   completeMedia(videoId: string): Promise<void>;
   /** NEEDS_FIX et alerte de l'humain */
   blockVideo(videoId: string, reason: string): Promise<void>;
+  /** le son a changé au montage : timeline effacée, monteur relancé (restartEdit de lib/pipeline) */
+  soundChanged(videoId: string): Promise<EditRestart>;
   budgets(): { perVideo: string | undefined };
   tools: AudioTools;
   voices: VoiceStore;
@@ -136,6 +138,9 @@ export function createPrismaAudioPorts(): AudioPorts {
     },
     async blockVideo(videoId, reason) {
       await blockVideo(getPipelineDeps(), { videoId, reason, actor: VOICE_ACTOR });
+    },
+    async soundChanged(videoId) {
+      return restartEdit(getPipelineDeps(), videoId);
     },
     budgets: () => readBudgets(),
     tools: configuredAudioTools(),

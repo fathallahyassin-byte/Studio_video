@@ -1,19 +1,20 @@
 "use client";
 
-import Image from "next/image";
+import { Player, type PlayerRef } from "@remotion/player";
 import Link from "next/link";
-import { useId, useState } from "react";
-import { buttonClass, Chip, FieldLabel, FormMessage, PendingNote } from "@/components/ui";
+import { useEffect, useId, useRef, useState } from "react";
+import { buttonClass, Chip, FormMessage, PendingNote } from "@/components/ui";
 import { useKeptForm } from "@/components/useKeptForm";
+import { durationInFrames, FPS, HEIGHT, toFrame, WIDTH } from "@/remotion/logic";
+import { Montage } from "@/remotion/Montage";
 import type { RenderAvailability } from "../render";
 import { launchRenderAction, type RenderFormState } from "./actions";
-import { formatSeconds, frameAt, type FrameView, type Segment, type TimelineView, type TrackView } from "./frame";
+import { formatSeconds, type Segment, type TimelineView, type TrackView } from "./view";
 
-// Liste des timelines à gauche ; à droite, prévisualisation statique 9:16 et frise des pistes.
+// Liste des timelines à gauche ; à droite, le Remotion Player (même composition que le rendu) et la frise des pistes.
 // Le jaune ne sert qu'à ce qui attend l'humain (vidéo à corriger, média manquant).
 
 const textWrap = "[overflow-wrap:anywhere]";
-const FRAME_STEP = 1 / 30;
 
 export function TimelineBrowser({ timelines, render }: { timelines: TimelineView[]; render: RenderAvailability }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -56,10 +57,28 @@ function TimelineList({ timelines, selectedId, onSelect }: { timelines: Timeline
   );
 }
 
+/** Instant courant du Player (en secondes), mis à jour pendant la lecture et après un déplacement. */
+function usePlayerTime(playerRef: React.RefObject<PlayerRef | null>): number {
+  const [timeS, setTimeS] = useState(0);
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+    const onFrame = (event: { detail: { frame: number } }) => setTimeS(event.detail.frame / FPS);
+    player.addEventListener("frameupdate", onFrame);
+    player.addEventListener("seeked", onFrame);
+    return () => {
+      player.removeEventListener("frameupdate", onFrame);
+      player.removeEventListener("seeked", onFrame);
+    };
+  }, [playerRef]);
+  return timeS;
+}
+
 function TimelineDetail({ timeline, render }: { timeline: TimelineView; render: RenderAvailability }) {
   const titleId = useId();
-  const [timeS, setTimeS] = useState(0);
-  const frame = frameAt(timeline, timeS);
+  const playerRef = useRef<PlayerRef>(null);
+  const timeS = usePlayerTime(playerRef);
+  const seek = (seconds: number) => playerRef.current?.seekTo(toFrame(seconds));
   return (
     <article aria-labelledby={titleId} className="flex min-w-0 flex-col gap-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -77,11 +96,39 @@ function TimelineDetail({ timeline, render }: { timeline: TimelineView; render: 
       {timeline.status.notice ? <AwaitingNotice videoId={timeline.videoId} notice={timeline.status.notice} /> : null}
       <Alerts alerts={timeline.alerts} />
 
-      <div className="grid gap-5 md:grid-cols-[minmax(160px,220px)_minmax(0,1fr)]">
-        <Preview frame={frame} />
+      <div className="grid gap-5 md:grid-cols-[minmax(180px,260px)_minmax(0,1fr)]">
+        <figure className="flex w-full max-w-[260px] flex-col gap-2 justify-self-center md:justify-self-start">
+          <div className="overflow-hidden rounded-xl bg-ink">
+            <Player
+              ref={playerRef}
+              component={Montage}
+              inputProps={timeline.timeline}
+              durationInFrames={durationInFrames(timeline.timeline)}
+              compositionWidth={WIDTH}
+              compositionHeight={HEIGHT}
+              fps={FPS}
+              controls
+              acknowledgeRemotionLicense
+              style={{ width: "100%", aspectRatio: `${WIDTH} / ${HEIGHT}` }}
+            />
+          </div>
+          <figcaption className="text-[13px] text-muted">
+            Prévisualisation de la timeline (même composition que le rendu).
+            {timeline.renderUrl ? (
+              <>
+                {" "}
+                <a href={timeline.renderUrl} className="font-bold text-ink underline underline-offset-2">
+                  Ouvrir le MP4 rendu
+                </a>
+              </>
+            ) : null}
+          </figcaption>
+        </figure>
         <div className="flex min-w-0 flex-col gap-4">
-          <Scrubber durationS={timeline.durationS} timeS={frame.timeS} onChange={setTimeS} />
-          <Tracks timeline={timeline} timeS={frame.timeS} onSeek={setTimeS} />
+          <p className="text-[13px] font-bold tabular-nums text-ink" aria-live="off">
+            {formatSeconds(timeS)} / {timeline.durationLabel}
+          </p>
+          <Tracks timeline={timeline} timeS={timeS} onSeek={seek} />
         </div>
       </div>
 
@@ -117,74 +164,8 @@ function Alerts({ alerts }: { alerts: TimelineView["alerts"] }) {
   );
 }
 
-const TEXT_POSITIONS: Record<string, string> = {
-  haut: "top-[12%]",
-  centre: "top-1/2 -translate-y-1/2",
-};
-
-/** Image fixe de la timeline à l'instant choisi (le Remotion Player la remplacera : voir NEEDS.md). */
-function Preview({ frame }: { frame: FrameView }) {
-  const { clip, cue } = frame;
-  return (
-    <figure className="flex w-full max-w-[240px] flex-col gap-2 justify-self-center md:justify-self-start">
-      <div className="relative aspect-[9/16] w-full overflow-hidden rounded-xl bg-ink text-white">
-        {clip?.kind === "IMAGE" ? <Image src={clip.src} alt={`Plan ${clip.plan}`} fill unoptimized sizes="240px" className="object-cover" /> : null}
-        {clip?.kind === "VIDEO" ? <video src={clip.src} muted playsInline preload="metadata" aria-label={`Plan ${clip.plan}`} className="h-full w-full object-cover" /> : null}
-        {clip?.kind === "MISSING" ? (
-          <div className="flex h-full items-center justify-center bg-wait p-3 text-center font-bold text-ink">{clip.plan} · média manquant</div>
-        ) : null}
-        {clip?.kind === "TEXT" ? (
-          <div className="flex h-full items-start justify-center p-3 text-[12px] font-bold uppercase tracking-wide text-white/75">{clip.plan} · texte animé</div>
-        ) : null}
-        {frame.texts.map((text) => (
-          <p
-            key={`${text.text}-${text.startS}`}
-            className={`absolute inset-x-3 text-center font-display text-[20px] leading-tight drop-shadow ${TEXT_POSITIONS[text.position] ?? "bottom-[26%]"} ${textWrap}`}
-          >
-            {text.text}
-          </p>
-        ))}
-        {cue ? (
-          <p className={`absolute inset-x-3 bottom-[21%] text-center text-[15px] font-bold leading-snug text-white/70 ${textWrap}`}>
-            {cue.before}
-            <span className="text-white underline decoration-2 underline-offset-4">{cue.active}</span>
-            {cue.after}
-          </p>
-        ) : null}
-      </div>
-      <figcaption className={`text-[13px] text-muted ${textWrap}`}>
-        {clip ? `${clip.plan} · ${clip.movement} · entrée ${clip.transition}` : "Aucun plan à cet instant"}
-      </figcaption>
-    </figure>
-  );
-}
-
-function Scrubber({ durationS, timeS, onChange }: { durationS: number; timeS: number; onChange: (value: number) => void }) {
-  const inputId = useId();
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between gap-3">
-        <FieldLabel htmlFor={inputId}>Instant prévisualisé</FieldLabel>
-        <output htmlFor={inputId} className="text-[13px] font-bold tabular-nums text-ink">
-          {formatSeconds(timeS)} / {formatSeconds(durationS)}
-        </output>
-      </div>
-      <input
-        id={inputId}
-        type="range"
-        min={0}
-        max={durationS}
-        step={FRAME_STEP}
-        value={timeS}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="w-full accent-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-      />
-    </div>
-  );
-}
-
-function Tracks({ timeline, timeS, onSeek }: { timeline: TimelineView; timeS: number; onSeek: (value: number) => void }) {
-  const playhead = timeline.durationS > 0 ? (timeS / timeline.durationS) * 100 : 0;
+function Tracks({ timeline, timeS, onSeek }: { timeline: TimelineView; timeS: number; onSeek: (seconds: number) => void }) {
+  const playhead = timeline.durationS > 0 ? Math.min((timeS / timeline.durationS) * 100, 100) : 0;
   return (
     <div className="flex flex-col gap-3">
       <div aria-hidden="true" className="relative h-4 text-[11px] text-muted sm:ml-[112px]">
@@ -207,7 +188,7 @@ const segmentTones: Record<Segment["tone"], string> = {
   wait: "bg-wait text-ink",
 };
 
-function TrackRow({ track, playhead, onSeek }: { track: TrackView; playhead: number; onSeek: (value: number) => void }) {
+function TrackRow({ track, playhead, onSeek }: { track: TrackView; playhead: number; onSeek: (seconds: number) => void }) {
   return (
     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
       <span className="text-[13px] font-bold text-ink sm:w-[100px] sm:shrink-0">{track.label}</span>
@@ -218,7 +199,7 @@ function TrackRow({ track, playhead, onSeek }: { track: TrackView; playhead: num
             key={segment.key}
             type="button"
             title={segment.title}
-            aria-label={`${track.label} : ${segment.title}`}
+            aria-label={`${track.label} : ${segment.title}, aller à cet instant`}
             onClick={() => onSeek(segment.startS)}
             className={`absolute inset-y-1 overflow-hidden rounded-md px-1.5 text-left text-[11px] font-bold text-ellipsis whitespace-nowrap focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink ${segmentTones[segment.tone]}`}
             style={{ left: `${segment.left}%`, width: `${segment.width}%` }}
@@ -238,7 +219,7 @@ function RenderForm({ videoId, awaitingRender, render }: { videoId: string; awai
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-2 border-t border-line pt-4">
       <input type="hidden" name="videoId" value={videoId} />
-      <button type="submit" disabled={!ready || pending} className={`${buttonClass(ready ? "hi" : "ink")} self-start`}>
+      <button type="submit" disabled={!ready || pending} className={`${buttonClass("ink")} self-start`}>
         {pending ? "Envoi…" : "Lancer le rendu"}
       </button>
       {render.note ? <PendingNote>{render.note}</PendingNote> : null}

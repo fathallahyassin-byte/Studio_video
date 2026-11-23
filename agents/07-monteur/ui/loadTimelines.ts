@@ -1,8 +1,7 @@
 import { formatDateTime, formatVideoNumber } from "@/lib/dashboard/format";
 import { Prisma, type PrismaClient } from "@/lib/generated/prisma/client";
 import type { EditAsset } from "../ports";
-import { planMedia } from "../sources";
-import type { TimelineView } from "./frame";
+import type { TimelineView } from "./view";
 import { toPendingEdit, toTimelineView, type PendingEditView } from "./timelines";
 
 const RECENT_LIMIT = 12;
@@ -25,6 +24,11 @@ async function assetsByVideo(db: PrismaClient, videoIds: readonly string[]): Pro
   return grouped;
 }
 
+/** URL du dernier MP4 rendu (assets triés du plus récent au plus ancien). */
+function latestRender(assets: readonly EditAsset[]): string | null {
+  return assets.find((asset) => asset.type === "RENDER")?.url ?? null;
+}
+
 async function loadTimelines(db: PrismaClient, channelId: string): Promise<{ timelines: TimelineView[]; unreadable: number }> {
   const videos = await db.video.findMany({
     where: { channelId, timelineJson: { not: Prisma.DbNull } },
@@ -34,10 +38,7 @@ async function loadTimelines(db: PrismaClient, channelId: string): Promise<{ tim
   });
   const assets = await assetsByVideo(db, videos.map((video) => video.id));
   const views = videos.map((video) =>
-    toTimelineView(
-      { ...video, label: formatVideoNumber(video.number), updatedLabel: formatDateTime(video.updatedAt) },
-      planMedia(assets.get(video.id) ?? []),
-    ),
+    toTimelineView({ ...video, label: formatVideoNumber(video.number), updatedLabel: formatDateTime(video.updatedAt) }, latestRender(assets.get(video.id) ?? [])),
   );
   const timelines = views.filter((view): view is TimelineView => view !== null);
   return { timelines, unreadable: views.length - timelines.length };

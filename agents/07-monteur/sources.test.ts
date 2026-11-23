@@ -22,8 +22,7 @@ describe("livrable audio de l'agent 6", () => {
 
   it("une musique sans licence n'est jamais utilisée", () => {
     expect(readAudioDeliverable(makeAudioPlan(), [{ ...musicAsset, license: "  " }]).music).toBeNull();
-    const json = { ...makeAudioPlan(), production: { musique: { url: MUSIC_URL, licence: "" } } };
-    expect(readAudioDeliverable(json, []).music).toBeNull();
+    expect(readAudioDeliverable(makeAudioJson({ musicLicense: "  " }), []).music).toBeNull();
   });
 
   it("rien d'enregistré : ni voix ni musique", () => {
@@ -48,7 +47,7 @@ describe("préconditions", () => {
   });
 
   it("voix sans horodatage : bloquant", () => {
-    expect(blockingIssues(inspectSources(makeVideo({ audio: makeAudioJson({ words: null }) }), []))).toEqual([NO_TIMINGS]);
+    expect(blockingIssues(inspectSources(makeVideo({ audio: makeAudioPlan() }), [voiceAsset]))).toEqual([NO_TIMINGS]);
     expect(blockingIssues(inspectSources(makeVideo({ audio: makeAudioJson({ words: [] }) }), []))).toEqual([NO_TIMINGS]);
   });
 
@@ -62,7 +61,7 @@ describe("préconditions", () => {
     expect(context.plans.map((plan) => plan.id)).toEqual(["P01", "P02", "P03", "P04"]);
     expect(context.words).toHaveLength(24);
     expect(context.lastWordEndS).toBe(11.95);
-    expect(context.voice).toEqual({ url: VOICE_URL, durationS: 12.1, measured: true });
+    expect(context.voice).toEqual({ url: VOICE_URL, durationS: 12.1 });
   });
 });
 

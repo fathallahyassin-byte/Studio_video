@@ -3,7 +3,7 @@ import { createTestDb } from "@/lib/testing/testDb";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient, type Stage } from "@/lib/generated/prisma/client";
 import type { Notification } from "@/lib/providers/notify";
-import { applyEvent, blockVideo, completeStage, decideIdeas, proposeIdeas, requestScout, resumeVideo, TransitionError, type Actor, type PipelineDeps } from "./service";
+import { applyEvent, blockVideo, completeStage, decideIdeas, proposeIdeas, requestRender, requestScout, restartEdit, resumeVideo, TransitionError, type Actor, type PipelineDeps } from "./service";
 
 const url = process.env.TEST_DATABASE_URL;
 const human: Actor = { kind: "human", name: "moi@example.test" };
@@ -190,5 +190,44 @@ describe.skipIf(!url)("pipeline sur base réelle", () => {
     expect(await requestScout(deps, channelId, monday)).toEqual({ queued: true, week: "2026-W48" });
     expect(await requestScout(deps, channelId, new Date(2026, 10, 27, 18))).toEqual({ queued: false, week: "2026-W48" });
     expect(await db.agentJob.count({ where: { channelId, agentId: 2 } })).toBe(1);
+  });
+
+  async function videoAtEdit() {
+    const video = await videoAt("VISUALS_AND_AUDIO", { storyboard: true, audio: true });
+    await completeStage(deps, { videoId: video.id, event: "MEDIA_DONE", actor: { kind: "agent", agentId: 6 } });
+    await db.video.update({ where: { id: video.id }, data: { timelineJson: { pistes: {} } } });
+    return video;
+  }
+
+  it("son changé au montage : timeline effacée, monteur relancé une fois (l'ancienne tâche en file est annulée)", async () => {
+    const video = await videoAtEdit();
+    expect(await restartEdit(deps, video.id)).toBe("restarted");
+    expect(await db.video.findUniqueOrThrow({ where: { id: video.id } })).toMatchObject({ stage: "EDIT", timelineJson: null });
+    const jobs = await jobsOf(video.id);
+    expect(jobs.filter((job) => job.agentId === 7).map((job) => job.status)).toEqual(["FAILED", "QUEUED"]);
+    expect(jobs.at(-1)?.jobKey).toMatch(/:agent-7:relance-2$/);
+    expect(await restartEdit(deps, video.id)).toBe("restarted");
+    expect((await jobsOf(video.id)).at(-1)?.jobKey).toMatch(/:agent-7:relance-3$/);
+  });
+
+  it("son changé, vidéo bloquée au montage : timeline effacée seulement ; ailleurs : rien", async () => {
+    const blocked = await videoAtEdit();
+    await blockVideo(deps, { videoId: blocked.id, reason: "média manquant", actor: { kind: "agent", agentId: 7 } });
+    expect(await restartEdit(deps, blocked.id)).toBe("cleared");
+    expect(await db.video.findUniqueOrThrow({ where: { id: blocked.id } })).toMatchObject({ timelineJson: null });
+    const early = await videoAt("VISUALS_AND_AUDIO");
+    expect(await restartEdit(deps, early.id)).toBe("none");
+  });
+
+  it("« Lancer le rendu » : une seule tâche active, rattachée au passage au rendu", async () => {
+    const video = await videoAtEdit();
+    expect(await requestRender(deps, video.id)).toEqual({ queued: false, reason: "La vidéo n'attend pas de rendu à cette étape." });
+    await completeStage(deps, { videoId: video.id, event: "EDIT_DONE", actor: { kind: "agent", agentId: 7 } });
+    expect(await requestRender(deps, video.id)).toEqual({ queued: false, reason: "Un rendu est déjà en file ou en cours pour cette vidéo." });
+    await db.agentJob.updateMany({ where: { videoId: video.id, kind: "RENDER" }, data: { status: "FAILED" } });
+    expect(await requestRender(deps, video.id)).toEqual({ queued: true });
+    const renders = (await jobsOf(video.id)).filter((job) => job.kind === "RENDER");
+    expect(renders).toHaveLength(2);
+    expect(renders[1]).toMatchObject({ stage: "RENDER", status: "QUEUED", transitionId: renders[0]?.transitionId });
   });
 });

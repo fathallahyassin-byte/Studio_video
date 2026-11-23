@@ -9,13 +9,13 @@ import type { AgentJob, PrismaClient } from "@/lib/generated/prisma/client";
 import { backoffMs, completeJob, failJob, MAX_JOB_ATTEMPTS, retryJob } from "@/lib/queue/queue";
 import type { LlmProvider } from "@/lib/providers/llm";
 import type { Notifier } from "@/lib/providers/notify";
+import type { RenderProvider } from "@/lib/providers/render";
+import type { JobOutcome } from "./outcome";
+import { createPrismaRenderPorts, runRenderJob } from "./render";
 
 // Exécution d'une tâche de la file. Le résultat dit au worker quoi faire de la tâche.
 
-export type JobOutcome =
-  | { kind: "done"; note?: string }
-  | { kind: "retry"; delayMs: number; reason: string; alert?: boolean }
-  | { kind: "failed"; reason: string };
+export type { JobOutcome } from "./outcome";
 
 export type JobDeps = {
   db: PrismaClient;
@@ -24,12 +24,14 @@ export type JobDeps = {
   llm: LlmProvider | null;
   /** par défaut le registre des agents ; remplaçable dans les tests */
   definitionFor?: (agentId: AgentId) => AnyAgentDefinition;
+  /** rendu Remotion ; null ou absent tant que le stockage n'est pas configuré */
+  renderer?: RenderProvider | null;
 };
 
 const HOUR = 60 * 60 * 1000;
 
 export async function handleJob(job: AgentJob, deps: JobDeps): Promise<JobOutcome> {
-  if (job.kind === "RENDER") return { kind: "retry", delayMs: HOUR, reason: "Rendu Remotion pas encore branché (étape 6)." };
+  if (job.kind === "RENDER") return runRenderJob(job, createPrismaRenderPorts(deps), deps.renderer ?? null);
   if (job.agentId === null) return { kind: "failed", reason: "Tâche d'agent sans agentId." };
 
   if (job.videoId) {

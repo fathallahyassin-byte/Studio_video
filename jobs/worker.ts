@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { claimNextJob, requeueStaleJobs } from "@/lib/queue/queue";
 import { getConfiguredLlmProvider } from "@/lib/providers/llmConfig";
 import { getNotifier } from "@/lib/providers/notify";
+import { getRenderProvider } from "@/lib/render/localRenderer";
 import { processNextJob, type JobDeps } from "./handlers";
 import { enqueueDueTasks } from "./schedule";
 
@@ -43,8 +44,9 @@ async function housekeeping(deps: JobDeps): Promise<void> {
 async function main(): Promise<void> {
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
-  const deps: JobDeps = { db: getDb(), notifier: getNotifier(), llm: getConfiguredLlmProvider() };
-  console.log(`[worker] démarré (scrutation toutes les ${POLL_MS} ms)${deps.llm ? "" : " — aucun fournisseur LLM : les tâches d'agents restent en file"}`);
+  const deps: JobDeps = { db: getDb(), notifier: getNotifier(), llm: getConfiguredLlmProvider(), renderer: getRenderProvider() };
+  const warnings = [deps.llm ? null : "aucun fournisseur LLM : les tâches d'agents restent en file", deps.renderer ? null : "stockage S3 non configuré : les rendus attendent"];
+  console.log(`[worker] démarré (scrutation toutes les ${POLL_MS} ms)${warnings.filter((warning) => warning !== null).map((warning) => ` — ${warning}`).join("")}`);
 
   let lastHousekeeping = 0;
   while (!stopping) {
