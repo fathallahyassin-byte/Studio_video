@@ -115,7 +115,7 @@ function DetailBody({ detail }: { detail: QueueDetail }) {
       return (
         <>
           {detail.review ? <ScriptReview content={detail.review} headingLevel="h3" /> : <Unreadable />}
-          <VideoDecisionForm videoId={detail.videoId} gate="V2" />
+          <VideoDecisionForm videoId={detail.videoId} gate="V2" partnership={detail.partnership} />
         </>
       );
     case "qa":
@@ -130,7 +130,7 @@ function DetailBody({ detail }: { detail: QueueDetail }) {
       return (
         <>
           <FixDetail reason={detail.reason} blockedAt={detail.blockedAt} />
-          <FixForm videoId={detail.videoId} sources={detail.blockedAt === "RESEARCH" ? detail.sources : undefined} />
+          <FixForm videoId={detail.videoId} sources={detail.blockedAt === "RESEARCH" ? detail.sources : undefined} suggestedReturn={detail.suggestedReturn} />
         </>
       );
   }

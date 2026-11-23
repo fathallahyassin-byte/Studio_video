@@ -49,7 +49,7 @@ export type TransitionInput = {
   stage: Stage;
   blockedAt: Stage | null;
   event: PipelineEvent;
-  /** V3_CHANGES_REQUESTED : étape où renvoyer la vidéo */
+  /** V3_CHANGES_REQUESTED, ou RESUMED d'une vidéo bloquée en QA : étape où renvoyer la vidéo */
   returnTo?: V3ReturnStage;
   /** PUBLISHED : une Validation V3 approuvée existe */
   hasV3Approval?: boolean;
@@ -70,7 +70,9 @@ export function transition(input: TransitionInput): TransitionResult {
         : refuse(`Impossible de bloquer une vidéo à l'étape ${stage}.`);
     case "RESUMED":
       if (stage !== "NEEDS_FIX" || input.blockedAt === null) return refuse("La vidéo n'est pas en attente de correction.");
-      return { ok: true, from: stage, to: input.blockedAt, blockedAt: null };
+      // Un NO-GO du contrôle qualité se corrige chez l'agent responsable : relancer QA redonnerait le même NO-GO.
+      if (input.returnTo && input.blockedAt !== "QA") return refuse("Seule une vidéo bloquée au contrôle qualité se renvoie à une autre étape.");
+      return { ok: true, from: stage, to: input.returnTo ?? input.blockedAt, blockedAt: null };
     case "ABANDONED":
       return stage === "PUBLISHED" || stage === "REJECTED"
         ? refuse("Une vidéo publiée ou déjà écartée ne s'abandonne pas.")

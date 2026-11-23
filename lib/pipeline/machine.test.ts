@@ -70,6 +70,12 @@ describe("blocage et reprise", () => {
     expect(go("SCRIPT", "RESUMED", { blockedAt: "SCRIPT" }).ok).toBe(false);
   });
 
+  it("un NO-GO du contrôle qualité se relance chez l'agent responsable", () => {
+    expect(go("NEEDS_FIX", "RESUMED", { blockedAt: "QA", returnTo: "SCRIPT" })).toEqual({ ok: true, from: "NEEDS_FIX", to: "SCRIPT", blockedAt: null });
+    expect(go("NEEDS_FIX", "RESUMED", { blockedAt: "QA" })).toMatchObject({ ok: true, to: "QA" });
+    expect(go("NEEDS_FIX", "RESUMED", { blockedAt: "EDIT", returnTo: "SCRIPT" })).toMatchObject({ ok: false, reason: expect.stringContaining("contrôle qualité") });
+  });
+
   it("abandonne tout sauf une vidéo publiée ou déjà écartée", () => {
     expect(go("NEEDS_FIX", "ABANDONED")).toMatchObject({ ok: true, to: "REJECTED" });
     expect(go("PUBLISHED", "ABANDONED").ok).toBe(false);

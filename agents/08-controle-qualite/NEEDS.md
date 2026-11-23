@@ -1,8 +1,8 @@
 # Besoins de l'agent 8 hors de son dossier
 
-Par ordre de priorité. Les points 1 à 3 sont à faire avant le premier vrai contrôle qualité (étapes 5 à 7 de la feuille de route).
+Par ordre de priorité. État au 23 novembre 2026 (session principale, voir `docs/decisions.md`, « Besoins du contrôle qualité ») : points 2 à 5 faits, point 6 fait sauf la phrase du prompt. Reste ouvert : le point 1 (transcription et captures du rendu), qui attend tes choix de fournisseur.
 
-## 1. Transcription et captures du rendu : `{{TRANSCRIPTION}}` et `{{CAPTURES}}` (bloquant)
+## 1. Transcription et captures du rendu : `{{TRANSCRIPTION}}` et `{{CAPTURES}}` (bloquant) : EN ATTENTE (choix du Whisper et de la méthode pour les captures)
 
 - **Besoin** : après chaque rendu, enregistrer (a) la transcription Whisper du MP4 final (texte, idéalement avec les mots horodatés) et (b) les descriptions de 5 images clés (première image, une par tiers, dernière image).
   - Stockage proposé : deux champs sur l'`Asset` de type `RENDER` (`transcript String?`, `frameDescriptions String[]`), ou sur `Video`. Une nouvelle transcription ou de nouvelles captures pour chaque nouveau rendu.
@@ -12,7 +12,7 @@ Par ordre de priorité. Les points 1 à 3 sont à faire avant le premier vrai co
 - **En attendant (décision du fork)** : la variable contient « NON DISPONIBLE : … », qui dit au modèle de ne rien présumer et quels points seront marqués « ko ». En code, `normalize` force ces points en `ko` avec la preuve « NON VÉRIFIÉ : … », une correction et `agent_responsable` = `08-controle-qualite`. A1 et A2 étant bloquants, **chaque vidéo sort en NO_GO tant que la transcription n'existe pas**. C'est voulu : un GO sans vérification des faits sur la vidéo rendue n'aurait aucune valeur.
 - **Pourquoi pas une précondition** : le worker relancerait la tâche toutes les heures sans jamais produire de rapport. Avec le rapport, l'humain voit exactement ce qui manque.
 
-## 2. Copier les étiquettes dans les `Publication` (agent 9 ou module de publication)
+## 2. Copier les étiquettes dans les `Publication` : FAIT (agent 9, `readPublicationLabels` dans `publishing.ts`)
 
 - **Besoin** : à la création des `Publication`, lire les étiquettes avec `readPublicationLabels(video.qaJson)` (`agents/08-controle-qualite/labels.ts`), qui renvoie pour `TIKTOK`, `INSTAGRAM` et `YOUTUBE` : `{ aiLabel, brandedContent }`, déjà dans la forme des colonnes `Publication.aiLabel` et `Publication.brandedContent`.
   - Rapport absent ou illisible (`null`) : refuser la création de la publication.
@@ -20,21 +20,27 @@ Par ordre de priorité. Les points 1 à 3 sont à faire avant le premier vrai co
   - Ne jamais recalculer ni baisser une étiquette dans le module de publication : le rapport, vu par l'humain en V3, fait foi.
 - **Pourquoi** : critère « Les étiquettes sont copiées dans les Publications » d'AGENT.md. Les `Publication` n'existent pas encore ; les étiquettes sont gardées dans `Video.qaJson` (`etiquettes`), dans le format du schéma.
 
-## 3. Reprendre un NO-GO chez l'agent responsable
+## 3. Reprendre un NO-GO chez l'agent responsable : FAIT
+
+- **Intégré** : `RESUMED` accepte `returnTo` pour une vidéo bloquée en `QA` (`lib/pipeline/machine.ts`, refusé pour les autres blocages) ; le détail « À corriger » propose « Relancer à l'étape », présélectionné avec `suggestReturnStage`.
 
 - **Besoin** : un NO_GO appelle `blockVideo` (raison : « Contrôle qualité : NO-GO, renvoyé à 04-scenariste. Points ko : … »), donc `NEEDS_FIX` avec `blockedAt = QA`. Or « Relancer l'étape » ne sait que revenir en `QA`, ce qui relance le contrôle sur la même vidéo et redonne le même NO_GO. Il faut, pour une vidéo bloquée en `QA`, proposer dans le détail « À corriger » l'étape où la renvoyer (les `V3_RETURN_STAGES`), présélectionnée avec `suggestReturnStage(parseQaReport(qaJson))`, et accepter `returnTo` sur `RESUMED` dans `lib/pipeline/machine.ts`.
 - **Pourquoi** : AGENT.md, « NO_GO → NEEDS_FIX, renvoyé à agent_responsable ».
 
-## 4. Saisir le partenariat d'une vidéo
+## 4. Saisir le partenariat d'une vidéo : FAIT
+
+- **Intégré** : champ « Partenariat commercial » dans le formulaire V2 (avant la production), enregistré dans `Video.partnership` par `savePartnership` (`lib/videos/partnership.ts` : vide, « non » ou « aucune » deviennent « aucun »).
 
 - **Besoin** : un champ « Partenariat commercial (marque et contrepartie, ou aucun) » sur la vidéo, qui écrit `Video.partnership`. Aucun écran ne permet de le modifier aujourd'hui.
 - **Pourquoi** : `{{PARTENARIAT}}` en dépend. Avec un partenariat, le code impose `contenu_de_marque: true`, la mention « Collaboration commerciale » (ou « Publicité ») et « Images virtuelles » s'il y a des images IA ; sans partenariat, il refuse `contenu_de_marque: true`.
 
-## 5. Lien vers la vidéo rendue
+## 5. Lien vers la vidéo rendue : FAIT (le stockage S3 enregistre l'adresse publique `https` du rendu)
 
 - **Besoin** : le panneau affiche « Voir la vidéo rendue » avec l'url du dernier `Asset` `RENDER`, seulement si c'est une url http(s). Si le stockage S3/R2 enregistre une clé plutôt qu'une url publique, il faudra une fonction d'url signée (`lib/storage`) que le panneau appellera.
 
-## 6. Petites améliorations (facultatives)
+## 6. Petites améliorations (facultatives) : FAIT sauf le prompt
+
+- **Intégré** : `suggestReturnStage` renvoie un « ko » de `03-recherchiste` au script ; le rapport de démonstration a les 16 points. La phrase du prompt attend ton accord.
 
 - `suggestReturnStage` (`lib/dashboard/queries.ts`) : un « ko » attribué à `03-recherchiste` (un fait faux) mérite plutôt `SCRIPT` que `EDIT` par défaut. Les agents responsables du rapport sont toujours écrits sous la forme du catalogue (`04-scenariste`…), recalculée en code, donc `startsWith("04")` fonctionne.
 - `lib/demo/demoData.ts` : le rapport de démonstration n'a que 7 points sur 16. Il reste lisible ; le panneau signale les « points absents du rapport ».

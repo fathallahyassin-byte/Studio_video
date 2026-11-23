@@ -213,11 +213,12 @@ export async function blockVideo(deps: PipelineDeps, input: { videoId: string; r
 
 /**
  * « Relancer l'étape » d'une vidéo à corriger. Pour une vidéo bloquée en recherche, enregistre d'abord
- * les sources données par l'humain (lues par le recherchiste dans {{SOURCES}}).
+ * les sources données par l'humain (lues par le recherchiste dans {{SOURCES}}). Une vidéo bloquée au
+ * contrôle qualité (NO-GO) peut repartir à l'étape de l'agent responsable (`returnTo`).
  */
 export async function resumeVideo(
   deps: PipelineDeps,
-  input: { videoId: string; actor: Actor; note?: string | null; researchSources?: readonly string[] },
+  input: { videoId: string; actor: Actor; note?: string | null; researchSources?: readonly string[]; returnTo?: V3ReturnStage },
 ): Promise<AppliedTransition> {
   if (input.researchSources) {
     const video = await deps.db.video.findUnique({ where: { id: input.videoId }, select: { stage: true, blockedAt: true } });
@@ -225,7 +226,7 @@ export async function resumeVideo(
       await deps.db.video.update({ where: { id: input.videoId }, data: { researchSources: [...input.researchSources] } });
     }
   }
-  return applyEvent(deps, { videoId: input.videoId, event: "RESUMED", actor: input.actor, note: input.note });
+  return applyEvent(deps, { videoId: input.videoId, event: "RESUMED", actor: input.actor, note: input.note, returnTo: input.returnTo });
 }
 
 /**
