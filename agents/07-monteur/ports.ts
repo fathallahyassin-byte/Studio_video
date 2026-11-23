@@ -2,7 +2,7 @@ import { getDb } from "@/lib/db";
 import type { Stage } from "@/lib/generated/prisma/client";
 import { toInputJson } from "@/lib/json";
 import { getPipelineDeps } from "@/lib/pipeline/deps";
-import { blockVideo, completeStage, type Actor } from "@/lib/pipeline/service";
+import { blockVideo, completeStage, requestRender, type Actor, type RenderRequest } from "@/lib/pipeline/service";
 import type { Output } from "./schema";
 
 // Accès à la base et au pipeline. Remplacés par des faux dans les tests.
@@ -36,6 +36,8 @@ export type EditPorts = {
   completeEdit(videoId: string): Promise<void>;
   /** NEEDS_FIX et alerte de l'humain */
   blockVideo(videoId: string, reason: string): Promise<void>;
+  /** « Lancer le rendu » : tâche RENDER remise en file (une seule active à la fois) */
+  queueRender(videoId: string): Promise<RenderRequest>;
 };
 
 export const EDITOR_ACTOR: Actor = { kind: "agent", agentId: 7 };
@@ -66,6 +68,9 @@ export function createPrismaEditPorts(): EditPorts {
     },
     async blockVideo(videoId, reason) {
       await blockVideo(getPipelineDeps(), { videoId, reason, actor: EDITOR_ACTOR });
+    },
+    async queueRender(videoId) {
+      return requestRender(getPipelineDeps(), videoId);
     },
   };
 }

@@ -221,3 +221,55 @@ export async function completeStage(deps: PipelineDeps, input: { videoId: string
   }
   return applyEvent(deps, input);
 }
+
+/** Dernière entrée de la vidéo dans `stage` : les tâches relancées s'y rattachent (même clé de rendu, même reprise). */
+async function lastEntryInto(tx: Tx, videoId: string, stage: Stage): Promise<{ id: string } | null> {
+  return tx.stageTransition.findFirst({ where: { videoId, to: stage }, orderBy: { createdAt: "desc" }, select: { id: true } });
+}
+
+export type RenderRequest = { queued: true } | { queued: false; reason: string };
+
+/**
+ * « Lancer le rendu » : remet une tâche RENDER en file pour une vidéo à l'étape du rendu (après un échec, par exemple).
+ * Une seule tâche de rendu active à la fois ; un MP4 déjà rendu pour ce passage est réutilisé (clé du rendu).
+ */
+export async function requestRender(deps: PipelineDeps, videoId: string): Promise<RenderRequest> {
+  return deps.db.$transaction(async (tx) => {
+    const video = await tx.video.findUnique({ where: { id: videoId }, select: { stage: true, channelId: true } });
+    if (!video) return { queued: false, reason: "Vidéo introuvable." };
+    if (video.stage !== "RENDER") return { queued: false, reason: "La vidéo n'attend pas de rendu à cette étape." };
+    const active = await tx.agentJob.count({ where: { videoId, kind: "RENDER", status: { in: ["QUEUED", "RUNNING"] } } });
+    if (active > 0) return { queued: false, reason: "Un rendu est déjà en file ou en cours pour cette vidéo." };
+    const entry = await lastEntryInto(tx, videoId, "RENDER");
+    if (!entry) return { queued: false, reason: "Passage au rendu introuvable dans le journal." };
+    const count = await tx.agentJob.count({ where: { transitionId: entry.id, kind: "RENDER" } });
+    await tx.agentJob.create({
+      data: { jobKey: `${entry.id}:render:relance-${count + 1}`, kind: "RENDER", channelId: video.channelId, videoId, stage: "RENDER", transitionId: entry.id },
+    });
+    return { queued: true };
+  });
+}
+
+export type EditRestart = "restarted" | "cleared" | "none";
+
+/**
+ * Le son a changé (voix régénérée, musique choisie) alors que la vidéo est au montage : la timeline est périmée.
+ * Au montage, elle est effacée et le monteur (agent 7) relancé ; bloquée au montage, elle est effacée (la reprise
+ * relancera le monteur). Avant ou après le montage : rien à faire.
+ */
+export async function restartEdit(deps: PipelineDeps, videoId: string): Promise<EditRestart> {
+  return deps.db.$transaction(async (tx) => {
+    const video = await tx.video.findUnique({ where: { id: videoId }, select: { stage: true, blockedAt: true, channelId: true } });
+    const atEdit = video?.stage === "EDIT";
+    if (!video || (!atEdit && !(video.stage === "NEEDS_FIX" && video.blockedAt === "EDIT"))) return "none";
+    await tx.video.update({ where: { id: videoId }, data: { timelineJson: Prisma.DbNull } });
+    const entry = atEdit ? await lastEntryInto(tx, videoId, "EDIT") : null;
+    if (!entry) return "cleared";
+    await tx.agentJob.updateMany({ where: { videoId, agentId: 7, status: "QUEUED" }, data: { status: "FAILED", lastError: "Remplacée : le son a changé." } });
+    const count = await tx.agentJob.count({ where: { transitionId: entry.id, agentId: 7 } });
+    await tx.agentJob.create({
+      data: { jobKey: `${entry.id}:agent-7:relance-${count + 1}`, kind: "AGENT", agentId: 7, channelId: video.channelId, videoId, stage: "EDIT", transitionId: entry.id },
+    });
+    return "restarted";
+  });
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clipOf, makeAssets, makeAudioPlan, makeContext, makeTimeline, makeVideo, MEDIA_URLS, MUSIC_URL, VOICE_URL, withClips } from "./fixtures";
+import { clipOf, makeAssets, makeContext, makeTimeline, makeVideo, MEDIA_URLS, MUSIC_URL, VOICE_URL, withClips } from "./fixtures";
 import {
   checkAudio,
   checkDuration,
@@ -17,11 +17,9 @@ import {
   MAX_TAIL_S,
   NO_MUSIC_ALERT,
   normalizeTimeline,
-  UNMEASURED_VOICE_ALERT,
   videoDuration,
 } from "./rules";
 import type { Output } from "./schema";
-import { inspectSources, requireEditContext } from "./sources";
 
 const context = makeContext();
 const normalized = normalizeTimeline(makeTimeline(), context);
@@ -110,11 +108,10 @@ describe("normalize", () => {
     expect(result.pistes.texte).toEqual([{ texte: "Fin", debut_s: 11, fin_s: 12.2, position: "bas_zone_sure", animation: "pop" }]);
   });
 
-  it("alertes en code : musique absente, effets non placés, durée de voix non mesurée (sans doublon)", () => {
-    const video = makeVideo({ audio: { ...makeAudioPlan(), production: { voix: { url: VOICE_URL, mots: makeContext().words.map((word) => ({ word: word.text, startS: word.startS, endS: word.endS })) } } } });
-    const bare = requireEditContext(inspectSources(video, makeAssets()));
+  it("alertes en code : musique absente, effets non placés (sans doublon)", () => {
+    const bare = { ...makeContext(), music: null };
     const result = normalizeTimeline(makeTimeline({ alertes: [NO_MUSIC_ALERT, "  "] }), bare);
-    expect(result.alertes).toEqual([NO_MUSIC_ALERT, "1 effet(s) sonore(s) du plan sonore non placé(s) : aucun fichier d'effet n'est disponible.", UNMEASURED_VOICE_ALERT]);
+    expect(result.alertes).toEqual([NO_MUSIC_ALERT, "1 effet(s) sonore(s) du plan sonore non placé(s) : aucun fichier d'effet n'est disponible."]);
     expect(result.pistes.audio).toEqual([{ type: "voix", src: VOICE_URL, debut_s: 0, volume_db: 0, ducking: false }]);
   });
 

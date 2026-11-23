@@ -58,6 +58,12 @@ async function isStillEditing(ports: EditPorts, videoId: string): Promise<boolea
   return video?.stage === "EDIT";
 }
 
+/** La timeline ne monte plus la voix ou la musique enregistrées aujourd'hui pour la vidéo. */
+export function usesOutdatedSound(timeline: Output, sources: Pick<EditSources, "voice" | "music">): boolean {
+  const srcOf = (type: "voix" | "musique") => timeline.pistes.audio.find((clip) => clip.type === type)?.src ?? null;
+  return srcOf("voix") !== (sources.voice?.url ?? null) || srcOf("musique") !== (sources.music?.url ?? null);
+}
+
 /**
  * Enregistre la timeline, puis passe au rendu. Si un plan n'a pas de fichier, la vidéo est bloquée avec la liste
  * (le rendu serait troué) : « Relancer l'étape » refait le montage une fois les fichiers ajoutés.
@@ -66,6 +72,8 @@ async function isStillEditing(ports: EditPorts, videoId: string): Promise<boolea
 export async function recordTimeline(ports: EditPorts, videoId: string, timeline: Output): Promise<void> {
   const video = await ports.loadVideo(videoId);
   if (video?.stage !== "EDIT") return;
+  // Son changé pendant le montage (voix régénérée, musique choisie) : un nouveau montage est déjà en file.
+  if (usesOutdatedSound(timeline, inspectSources(video, await ports.loadAssets(videoId)))) return;
   await ports.saveTimeline(videoId, timeline);
   const missing = missingPlanIds(timeline);
   try {

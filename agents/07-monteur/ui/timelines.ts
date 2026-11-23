@@ -1,8 +1,8 @@
 import type { Stage } from "@/lib/generated/prisma/client";
 import type { EditAsset, EditVideo } from "../ports";
 import type { Output } from "../schema";
-import { blockingIssues, inspectSources, missingMedia, parseStoredTimeline, type PlanMedia } from "../sources";
-import { formatSeconds, type ClipView, type CueView, type Segment, type SegmentTone, type TextView, type TimelineStatus, type TimelineView, type TrackView } from "./frame";
+import { blockingIssues, inspectSources, missingMedia, parseStoredTimeline } from "../sources";
+import { formatSeconds, type Segment, type SegmentTone, type TimelineStatus, type TimelineView, type TrackView } from "./view";
 
 // Modèle de vue du panneau : données sérialisables, calculées côté serveur (fonctions pures).
 
@@ -55,36 +55,6 @@ const startEnd = (span: Span) => ({ startS: span.debut_s, endS: span.fin_s });
 // Pistes.
 // ---------------------------------------------------------------------------
 
-function clipKind(clip: Output["pistes"]["video"][number], media: readonly PlanMedia[]): ClipView["kind"] {
-  if (clip.manquant) return "MISSING";
-  if (clip.src === "") return "TEXT";
-  return media.find((entry) => entry.url === clip.src)?.kind ?? "IMAGE";
-}
-
-export function toClips(timeline: Output, media: readonly PlanMedia[]): ClipView[] {
-  return timeline.pistes.video.map((clip) => ({
-    plan: clip.plan,
-    ...startEnd(clip),
-    src: clip.src,
-    kind: clipKind(clip, media),
-    movement: clip.mouvement,
-    transition: clip.transition_entree,
-  }));
-}
-
-/** Mot actif repéré dans l'ordre du groupe (un mot répété est mis en évidence à la bonne place). */
-export function toCues(cues: Output["pistes"]["sous_titres"]): CueView[] {
-  let cursor = 0;
-  return cues.map((cue, index) => {
-    if (index === 0 || cues[index - 1]?.mots !== cue.mots) cursor = 0;
-    const found = cue.mots.indexOf(cue.mot_actif, cursor);
-    const at = found === -1 ? cue.mots.length : found;
-    const length = found === -1 ? 0 : cue.mot_actif.length;
-    cursor = at + length;
-    return { ...startEnd(cue), before: cue.mots.slice(0, at), active: cue.mots.slice(at, at + length), after: cue.mots.slice(at + length) };
-  });
-}
-
 /** Un bloc par groupe de sous-titres (les entrées par mot d'un même groupe sont fusionnées). */
 function subtitleSegments(cues: Output["pistes"]["sous_titres"], durationS: number): Segment[] {
   const groups: { text: string; startS: number; endS: number }[] = [];
@@ -129,12 +99,8 @@ export function toTicks(durationS: number): { left: number; label: string }[] {
   return ticks;
 }
 
-function toTexts(timeline: Output): TextView[] {
-  return timeline.pistes.texte.map((text) => ({ text: text.texte, ...startEnd(text), position: text.position, animation: text.animation }));
-}
-
 /** null si la timeline enregistrée est illisible (elle est alors comptée à part). */
-export function toTimelineView(row: TimelineRow, media: readonly PlanMedia[]): TimelineView | null {
+export function toTimelineView(row: TimelineRow, renderUrl: string | null = null): TimelineView | null {
   const timeline = parseStoredTimeline(row.timelineJson);
   if (!timeline) return null;
   const { export: format } = timeline;
@@ -150,9 +116,8 @@ export function toTimelineView(row: TimelineRow, media: readonly PlanMedia[]): T
     tracks: toTracks(timeline),
     ticks: toTicks(timeline.duree_totale_s),
     alerts: timeline.alertes.map((text) => ({ text, action: /manquant/iu.test(text) })),
-    clips: toClips(timeline, media),
-    texts: toTexts(timeline),
-    cues: toCues(timeline.pistes.sous_titres),
+    timeline,
+    renderUrl,
     awaitingRender: row.stage === "RENDER",
   };
 }

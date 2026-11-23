@@ -1,3 +1,4 @@
+import type { AudioPlan as StoredAudioPlan } from "@/agents/06-voix-son/audioPlan";
 import type { Stage } from "@/lib/generated/prisma/client";
 import type { WordTiming } from "@/lib/providers/media";
 import type { EditAsset, EditPorts, EditVideo } from "./ports";
@@ -71,14 +72,25 @@ export function makeAudioPlan(overrides: Partial<AudioPlan> = {}): AudioPlan {
   };
 }
 
-/** Plan sonore enregistré avec le bloc « production » du fork de l'agent 6 (voix, horodatage, musique). */
-export function makeAudioJson(options: { words?: WordTiming[] | null; durationS?: number } = {}): Record<string, unknown> {
-  const words = options.words === undefined ? makeWords() : options.words;
+/** Plan sonore enregistré par l'agent 6 : sortie du modèle + bloc « production » (voix, horodatage, musique). */
+export function makeAudioJson(options: { words?: WordTiming[]; durationS?: number; musicLicense?: string } = {}): StoredAudioPlan {
   return {
     ...makeAudioPlan(),
     production: {
-      voix: { url: VOICE_URL, duree_s: options.durationS ?? 12.1, ...(words === null ? {} : { mots: words }) },
-      musique: { url: MUSIC_URL, licence: "Banque X, usage commercial 3 plateformes" },
+      duree_estimee_s: 12,
+      duree_cible_s: [10, 15],
+      voix: {
+        url: VOICE_URL,
+        fournisseur: "faux-tts",
+        voix_id: "voix-1",
+        langue: "fr-FR",
+        duree_s: options.durationS ?? 12.1,
+        mots: options.words ?? makeWords(),
+        horodatage: "tts",
+        coupes_appliquees: [],
+        tentative: 1,
+      },
+      musique: { titre: "Curious", url: MUSIC_URL, fournisseur: "banque", licence: options.musicLicense ?? "Banque X, usage commercial 3 plateformes", source: "banque" },
     },
   };
 }
@@ -143,7 +155,7 @@ export type FakeEditPorts = {
   ports: EditPorts;
   video: EditVideo;
   assets: EditAsset[];
-  calls: { saved: Output[]; completed: number; blocked: string[] };
+  calls: { saved: Output[]; completed: number; blocked: string[]; renders: number };
 };
 
 export type PortOptions = { video?: Partial<EditVideo>; assets?: EditAsset[]; failComplete?: Error };
@@ -152,7 +164,7 @@ export type PortOptions = { video?: Partial<EditVideo>; assets?: EditAsset[]; fa
 export function makePorts(options: PortOptions = {}): FakeEditPorts {
   const video = makeVideo(options.video);
   const assets = options.assets ?? makeAssets();
-  const calls: FakeEditPorts["calls"] = { saved: [], completed: 0, blocked: [] };
+  const calls: FakeEditPorts["calls"] = { saved: [], completed: 0, blocked: [], renders: 0 };
   const moveTo = (stage: Stage, blockedAt: Stage | null) => {
     video.stage = stage;
     video.blockedAt = blockedAt;
@@ -172,6 +184,10 @@ export function makePorts(options: PortOptions = {}): FakeEditPorts {
     async blockVideo(_videoId, reason) {
       calls.blocked.push(reason);
       moveTo("NEEDS_FIX", "EDIT");
+    },
+    async queueRender() {
+      calls.renders += 1;
+      return { queued: true };
     },
   };
   return { ports, video, assets, calls };

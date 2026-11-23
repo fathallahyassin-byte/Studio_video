@@ -2,6 +2,21 @@
 
 Une entrée par décision, la plus récente en haut.
 
+## 2026-11-23 — Rendu Remotion sur le worker, stockage S3, besoins du monteur (agent 7)
+- Contexte : `agents/07-monteur/NEEDS.md` et étape 6 de la feuille de route. Choix du propriétaire : rendu sur la machine du worker (pas Remotion Lambda), stockage S3 branché tout de suite.
+- Décision :
+  - Dépendances (versions exactes, publiées il y a au moins deux semaines) : `remotion`, `@remotion/bundler`, `@remotion/renderer`, `@remotion/player` 4.0.542, `@aws-sdk/client-s3` 3.1164.0. Remotion est gratuit pour un particulier ; une entreprise de plus de 3 personnes doit prendre une licence (`REMOTION_LICENSE_KEY`). Au premier rendu, Remotion télécharge son Chromium (Chrome Headless Shell) sur la machine du worker.
+  - Composition `Montage` (`remotion/`) : 1080×1920, 30 i/s, `inputProps` = `Video.timelineJson` tel quel, durée = `duree_totale_s`. Plans (image, vidéo, texte animé, aplat si manquant) avec mouvement et transition d'entrée ; textes animés 0,3 s au plus ; sous-titres un groupe à la fois, mot actif en jaune, dans la zone sûre ; voix ; musique au niveau du plan sonore, remontée de 10 dB entre les phrases quand le ducking est actif. Imports relatifs seulement (le bundler Remotion ne connaît pas `@/`).
+  - `lib/render/localRenderer.ts` (worker uniquement) : bundle une fois par processus, `renderMedia` en H.264 + AAC 48 kHz dans un dossier temporaire, puis envoi au stockage. Coût 0 (pas de fournisseur payant) : pas d'estimation avant rendu ; à ajouter si on passe un jour à Lambda (CLAUDE.md §5.7). `RENDER_CONCURRENCY` facultatif.
+  - Stockage : interface `lib/providers/storage.ts`, implémentation S3/R2 `lib/providers/s3.ts`. Configuré quand `S3_BUCKET`, les deux clés et `S3_PUBLIC_BASE_URL` sont remplis (`S3_ENDPOINT` pour R2, `S3_REGION` par défaut `auto`). Les URL enregistrées sont publiques et durables (`S3_PUBLIC_BASE_URL/clé`) : le bucket (ou son domaine public) doit être lisible.
+  - Tâche `RENDER` (`jobs/render.ts`) : refuse et bloque la vidéo si la timeline est illisible, si un plan est `manquant` ou si la musique n'a pas d'`Asset` MUSIC avec licence (CLAUDE.md §8) ; sans stockage, elle attend (relance toutes les heures, alerte à la première prise). Clé de rendu `vidéo:render:transition` dans `Asset.generationKey` : un rendu réussi n'est jamais refait (reprise, relance manuelle). `Asset` RENDER + coût dans une transaction, puis `RENDER_DONE` → contrôle qualité.
+  - « Lancer le rendu » (panneau du monteur) : `requestRender` (`lib/pipeline/service.ts`) remet une tâche RENDER en file pour une vidéo à l'étape du rendu, une seule active à la fois, rattachée au dernier passage au rendu (même clé de rendu).
+  - Son modifié au montage (« Régénérer la voix », piste choisie, panneau de l'agent 6) : `restartEdit` efface la timeline et relance le monteur (tâche `transition:agent-7:relance-N`, l'ancienne tâche en file est annulée) ; vidéo bloquée au montage : timeline effacée, la reprise refait le montage. Le monteur n'enregistre pas une timeline dont la voix ou la musique ne sont plus celles de la vidéo.
+  - Le monteur lit le livrable audio avec `parseStoredAudioPlan` de l'agent 6 (format `production`), les Asset VOICE / MUSIC en secours.
+  - Le panneau du monteur affiche le Remotion Player (même composition que le rendu) à la place de la prévisualisation statique, et un lien vers le MP4 rendu.
+- Alternatives écartées : Remotion Lambda (rapide mais AWS payant, à reconsidérer si le worker est trop lent) ; dossier local servi par une route protégée (refusé par le propriétaire : S3 tout de suite) ; URL S3 présignées (elles expirent).
+- Restent ouverts (voir `agents/07-monteur/NEEDS.md`) : ajout à la main du fichier d'un plan (upload) et fichiers d'effets sonores.
+
 ## 2026-11-22 — Besoins du fork de l'agent 5 (directeur artistique)
 - Contexte : `agents/05-directeur-artistique/NEEDS.md`. Médias générés sans clé d'idempotence en base ; storyboard et plan sonore du passage précédent encore présents quand la vidéo revient en `VISUALS_AND_AUDIO` ; labels IA des plans invisibles avant le GO.
 - Décision :

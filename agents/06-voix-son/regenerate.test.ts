@@ -29,7 +29,8 @@ describe("« Régénérer la voix »", () => {
   it("nouvelle tentative avec le texte modifié : nouvel Asset voix, plan mis à jour", async () => {
     const fake = await withSavedPlan();
     const result = await regenerateVoice(fake.ports, { videoId: VIDEO_ID, text: NEW_TEXT });
-    expect(result).toEqual({ ok: true, message: "Voix régénérée (tentative 2) : 25 s." });
+    expect(result).toEqual({ ok: true, message: "Voix régénérée (tentative 2) : 25 s. Le montage est relancé avec ce son." });
+    expect(fake.calls.soundChanged).toBe(1);
     expect(fake.voices.records).toHaveLength(2);
     const plan = parseStoredAudioPlan(fake.video.audio);
     expect(plan?.texte_tts).toBe(NEW_TEXT);
@@ -91,5 +92,22 @@ describe("piste choisie par l'humain", () => {
     const fake = await withSavedPlan();
     await chooseMusic(fake.ports, { videoId: VIDEO_ID, title: MANUAL_TRACK.titre, url: MANUAL_TRACK.url, license: MANUAL_TRACK.licence });
     expect(parseStoredAudioPlan(fake.video.audio)?.production.musique).toEqual(MANUAL_TRACK);
+  });
+});
+
+describe("son modifié au montage", () => {
+  it("bloquée au montage : la timeline est effacée, la relance de l'étape refera le montage", async () => {
+    const fake = await withSavedPlan();
+    fake.video.stage = "NEEDS_FIX";
+    fake.video.blockedAt = "EDIT";
+    const result = await chooseMusic(fake.ports, { videoId: VIDEO_ID, title: MANUAL_TRACK.titre, url: MANUAL_TRACK.url, license: MANUAL_TRACK.licence });
+    expect(result.message).toContain("La timeline est effacée : relance l'étape");
+  });
+
+  it("aux visuels et son : rien à refaire", async () => {
+    const fake = await withSavedPlan();
+    fake.video.stage = "VISUALS_AND_AUDIO";
+    const result = await regenerateVoice(fake.ports, { videoId: VIDEO_ID, text: NEW_TEXT });
+    expect(result).toMatchObject({ ok: true, message: "Voix régénérée (tentative 2) : 25 s." });
   });
 });

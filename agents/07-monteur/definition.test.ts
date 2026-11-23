@@ -7,7 +7,7 @@ import { createMemoryRunStore } from "@/lib/agents/memoryStore";
 import { runAgent } from "@/lib/agents/runAgent";
 import type { LlmProvider, LlmRequest } from "@/lib/providers/llm";
 import type { Notification } from "@/lib/providers/notify";
-import { createEditorDefinition, definition, recordTimeline } from "./definition";
+import { createEditorDefinition, definition, recordTimeline, usesOutdatedSound } from "./definition";
 import { makeAssets, makeAudioJson, makeAudioPlan, makeContext, makePorts, makeTimeline, TEST_BIBLE, VOICE_URL, withClips, type PortOptions } from "./fixtures";
 import { MAX_TAIL_S, normalizeTimeline } from "./rules";
 import { NO_TIMINGS, NO_VOICE } from "./sources";
@@ -118,7 +118,7 @@ describe("préconditions : aucun appel au modèle", () => {
     ["storyboard absent", { storyboard: null }, "Storyboard absent"],
     ["plan sonore illisible", { audio: { texte_tts: 3 } }, "Plan sonore illisible"],
     ["voix absente (aucune synthèse vocale branchée)", { audio: makeAudioPlan() }, NO_VOICE],
-    ["horodatage absent", { audio: makeAudioJson({ words: null }) }, NO_TIMINGS],
+    ["horodatage absent", { audio: makeAudioJson({ words: [] }) }, NO_TIMINGS],
   ])("%s", async (_label, video, message) => {
     const ctx = setup([json(makeTimeline())], { video });
     await expect(ctx.run()).rejects.toThrow(AgentPreconditionError);
@@ -157,7 +157,16 @@ describe("onSuccess idempotent", () => {
   it.each(["RENDER", "QA", "NEEDS_FIX", "REJECTED"] as const)("vidéo en %s : rien n'est enregistré ni transité, sans erreur", async (stage) => {
     const fake = makePorts({ video: { stage } });
     await expect(recordTimeline(fake.ports, VIDEO_ID, timeline)).resolves.toBeUndefined();
-    expect(fake.calls).toEqual({ saved: [], completed: 0, blocked: [] });
+    expect(fake.calls).toEqual({ saved: [], completed: 0, blocked: [], renders: 0 });
+  });
+
+  it("son changé pendant le montage (voix régénérée) : la timeline périmée n'est ni enregistrée ni envoyée au rendu", async () => {
+    const fake = makePorts({ video: { audio: makeAudioJson() } });
+    const outdated = { ...timeline, pistes: { ...timeline.pistes, audio: timeline.pistes.audio.map((clip) => (clip.type === "voix" ? { ...clip, src: "https://media.test/ancienne-voix.mp3" } : clip)) } };
+    await recordTimeline(fake.ports, VIDEO_ID, outdated);
+    expect(fake.calls).toMatchObject({ saved: [], completed: 0, blocked: [] });
+    expect(usesOutdatedSound(timeline, { voice: { url: VOICE_URL, measuredS: 12, words: null }, music: null })).toBe(true);
+    expect(usesOutdatedSound({ ...timeline, pistes: { ...timeline.pistes, audio: timeline.pistes.audio.filter((clip) => clip.type === "voix") } }, { voice: { url: VOICE_URL, measuredS: 12, words: null }, music: null })).toBe(false);
   });
 
   it("vidéo disparue : sans erreur", async () => {
