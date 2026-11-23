@@ -46,6 +46,7 @@ export async function produceSoundtrack(ports: AudioPorts, input: SoundtrackInpu
     attempt: 1,
     remainingBudget: budget.remaining,
     isStillActive: input.isStillActive,
+    expectedDurationS: settings.target.maxS,
     cuts: output.coupes_si_trop_long,
     target: settings.target,
   });

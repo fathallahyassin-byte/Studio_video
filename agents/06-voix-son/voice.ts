@@ -47,6 +47,8 @@ export type VoiceJob = {
   remainingBudget: number | null;
   /** relu avant chaque génération payante : faux si la vidéo a quitté l'étape (abandon, blocage) */
   isStillActive(): Promise<boolean>;
+  /** durée attendue de la voix, pour estimer Whisper avant de payer ; à défaut, mots ÷ 2 (voix lente) */
+  expectedDurationS?: number;
 };
 
 export type VoiceOutcome =
@@ -73,7 +75,9 @@ export async function produceVoice(store: VoiceStore, tools: { tts: TtsProvider;
   const existing = await store.findVoice(key);
   if (existing) return withTimings(store, tools.stt, job, existing, { cost: 0, reused: true });
 
-  const estimate = tools.tts.estimateCost(request.text);
+  // Sans horodatage du moteur ni Whisper, la voix serait payée puis inutilisable : refus avant de payer.
+  if (!tools.tts.providesWordTimings && !tools.stt) return { status: "no_timings" };
+  const estimate = tools.tts.estimateCost(request.text) + whisperEstimate(tools, job);
   if (estimate > 0 && job.remainingBudget === null) return { status: "no_budget" };
   if (job.remainingBudget !== null && estimate > job.remainingBudget) return { status: "over_budget", estimate, remaining: job.remainingBudget };
   if (!(await job.isStillActive())) return { status: "stopped" };
@@ -82,6 +86,13 @@ export async function produceVoice(store: VoiceStore, tools: { tts: TtsProvider;
   const voice: StoredVoice = { key, url: result.url, provider: tools.tts.name, durationS: result.durationS, words: result.words, timingSource: result.words ? "tts" : null };
   await store.recordVoice({ ...voice, videoId: job.videoId, attempt: job.attempt, text: job.text, cost: result.cost });
   return withTimings(store, tools.stt, job, voice, { cost: result.cost, reused: false });
+}
+
+/** Coût de Whisper, compté avant de payer la voix quand le moteur ne donne pas l'horodatage. */
+export function whisperEstimate(tools: { tts: TtsProvider; stt: SttProvider | null }, job: Pick<VoiceJob, "text" | "expectedDurationS">): number {
+  if (tools.tts.providesWordTimings || !tools.stt) return 0;
+  const words = job.text.split(/\s+/).filter((word) => word !== "").length;
+  return tools.stt.estimateCost(job.expectedDurationS ?? words / 2);
 }
 
 async function withTimings(
@@ -93,7 +104,7 @@ async function withTimings(
 ): Promise<VoiceOutcome> {
   if (voice.words) return { status: "done", voice: { ...voice, words: voice.words }, ...spent };
   if (!stt) return { status: "no_timings" };
-  // Whisper n'annonce pas son coût à l'avance : il passe une fois la voix payée (voir NEEDS.md).
+  // Whisper passe une fois la voix payée ; son coût a été estimé avec elle (whisperEstimate).
   const transcript = await stt.transcribe({ audioUrl: voice.url, language: job.language });
   await store.recordTimings(voice.key, transcript.words, transcript.cost);
   return { status: "done", voice: { ...voice, words: transcript.words, timingSource: "stt" }, cost: spent.cost + transcript.cost, reused: spent.reused };

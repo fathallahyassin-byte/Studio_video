@@ -1,8 +1,10 @@
 # Besoins de l'agent 6 hors de son dossier
 
-Pour la session principale. Rien ici n'a été modifié par le fork.
+État au 23 novembre 2026 (session principale, voir `docs/decisions.md`, « Besoins du son ») : points 4, 5 et 6 faits ; interfaces des points 1 à 3 prêtes. Restent ouverts : le choix des fournisseurs réels (points 1 à 3, payants), la phrase du prompt (point 7, ton accord) et le plafond mensuel (point 8).
 
-## 1. Brancher un moteur de synthèse vocale (étape 5 de la feuille de route)
+## 1. Brancher un moteur de synthèse vocale : INTERFACE PRÊTE, fournisseur à choisir (payant)
+
+- **Intégré** : `getTtsProvider()` (`lib/providers/tts.ts`, renvoie `null` tant qu'aucun moteur n'est choisi) est lu par `configuredAudioTools()`. `TtsProvider.providesWordTimings` est ajouté : sans horodatage du moteur ni Whisper, la voix est refusée **avant** d'être payée. Reste à écrire le fournisseur réel, avec ton accord. `TtsRequest.pronunciations` (facultatif) n'est pas fait.
 
 - **Quoi** : un `TtsProvider` réel dans `lib/providers/` (clé `TTS_API_KEY`, déjà dans `.env.example`) et une fabrique `getTtsProvider(): TtsProvider | null`, puis remplacer `tts: null` dans `configuredAudioTools()` (`agents/06-voix-son/ports.ts`).
 - **Pourquoi** : aucun moteur n'existe. Ajouter un fournisseur payant demande ton accord (CLAUDE.md §13). En attendant, voir « Sans TTS » plus bas.
@@ -15,18 +17,24 @@ Pour la session principale. Rien ici n'a été modifié par le fork.
   - `TtsRequest.pronunciations?: { word: string; phonetic: string }[]` (lexique du moteur) : aujourd'hui `prononciations` n'atteint le moteur que si le modèle les écrit en balises ; la liste est affichée dans le panneau.
   - La vitesse de `direction_par_beat` est par beat, `TtsRequest.speed` est global : on envoie `speed: 1`.
 
-## 2. Whisper (horodatage de secours)
+## 2. Whisper (horodatage de secours) : INTERFACE PRÊTE, fournisseur à choisir (payant)
+
+- **Intégré** : `SttProvider.estimateCost(durationS)` et `getSttProvider()` (`lib/providers/stt.ts`). Quand le moteur ne donne pas l'horodatage, le coût de Whisper (sur la durée maximale de la cible) entre dans l'estimation faite avant de payer la voix.
 
 - **Quoi** : un `SttProvider` réel et sa fabrique, à mettre dans `stt` de `configuredAudioTools()`. Ajouter `estimateCost(durationS)` à `SttProvider`.
 - **Pourquoi** : si le moteur TTS ne donne pas l'horodatage, Whisper le récupère (une seule fois par voix, même après une reprise). Son coût n'est pas annoncé à l'avance : il n'entre donc pas dans l'estimation faite avant de payer la voix (il est ajouté ensuite au coût de la vidéo).
 
-## 3. Banque de musique libre de droits
+## 3. Banque de musique libre de droits : INTERFACE DÉPLACÉE, fournisseur à choisir
+
+- **Intégré** : `MusicLibrary`, `MusicTrack`, `MusicQuery` et `getMusicLibrary()` sont dans `lib/providers/music.ts` (réexportés par `music.ts`). Le choix manuel dans le panneau reste la solution en attendant.
 
 - **Quoi** : déplacer `MusicLibrary`, `MusicTrack` et `MusicQuery` de `agents/06-voix-son/music.ts` vers `lib/providers/music.ts`, écrire un fournisseur réel et le mettre dans `music` de `configuredAudioTools()`.
 - **Pourquoi** : `lib/providers/` n'a rien pour chercher une musique. Le fournisseur doit renvoyer la **licence** de chaque piste et dire si elle couvre l'usage commercial sur les 3 plateformes (`commercialUse`) : sans licence, une piste est écartée et n'est jamais enregistrée (CLAUDE.md §8).
 - **En attendant** : l'humain choisit la piste dans le panneau (titre, URL, licence obligatoire). Elle est enregistrée en `Asset` MUSIC (`provider = "choix manuel · <titre>"`) et réutilisée à la relance de l'étape.
 
-## 4. Enregistrer les voix générées : `Asset.generationKey` et horodatage
+## 4. Enregistrer les voix générées : `Asset.generationKey` et horodatage : FAIT
+
+- **Intégré** : colonnes `Asset.wordTimings` et `Asset.timingSource` (migration `20261123150000_voice_word_timings`) ; `createPrismaVoiceStore(db)` dans `ports.ts` remplace `createUnconfiguredVoiceStore()` (Asset VOICE unique par clé + coût sur la vidéo en une transaction ; horodatage Whisper écrit une seule fois, coût compris). Test d'intégration : `ports.integration.test.ts`. `Asset.title` (facultatif) n'est pas fait.
 
 - **Quoi** : `generationKey String? @unique` sur `Asset` (même besoin que l'agent 5, point 2) et un champ pour l'horodatage, par exemple `wordTimings Json?` (+ migration). Puis une vraie implémentation de `VoiceStore` (`agents/06-voix-son/voice.ts`) à la place de `createUnconfiguredVoiceStore()` dans `ports.ts` :
   - `findVoice(key)` : l'`Asset` VOICE dont `generationKey = key`, avec `url`, `provider`, `durationS`, `wordTimings` (`timingSource` : `"tts"` ou `"stt"`, à stocker aussi, ou dans le même JSON) ;
@@ -36,12 +44,12 @@ Pour la session principale. Rien ici n'a été modifié par le fork.
 - **Pourquoi** : CLAUDE.md §8 bis (« un worker qui redémarre ne relance jamais une génération payante déjà réussie »). La clé vaut `videoId:voix:tentative:empreinte` (empreinte = SHA-256 de `{ text, voiceId, speed }`) : une relance de l'étape qui produit le **même** texte réutilise la voix déjà payée ; un texte coupé ou modifié en fait une nouvelle ; « Régénérer la voix » est une nouvelle tentative. Sans colonne, `recordVoice` lève une erreur explicite ; il n'est jamais atteint tant qu'aucun TTS n'est branché.
 - **Facultatif** : `Asset.title String?`, pour ne plus ranger le titre d'une piste choisie à la main dans `provider`.
 
-## 5. Plan sonore périmé à la reprise de VISUALS_AND_AUDIO (me concerne directement)
+## 5. Plan sonore périmé à la reprise de VISUALS_AND_AUDIO : FAIT (session principale, `staleDeliverables` dans `lib/pipeline/service.ts`)
 
 - **Quoi** : le point 5 de `agents/05-directeur-artistique/NEEDS.md` (remettre `storyboardJson` **et** `audioJson` à `null` quand la vidéo entre dans `VISUALS_AND_AUDIO`, ou comparer leur date d'écriture à la dernière transition dans `completeStage`).
 - **Pourquoi, côté son** : après un renvoi V3 ou une reprise, l'ancien `audioJson` reste en base. Si l'agent 5 finit avant moi, `completeStage` voit les deux JSON et passe au montage **avec l'ancienne voix** ; mon `onSuccess` voit alors la vidéo au montage et ne fait rien (idempotence). De mon côté, `audioJson` n'est écrit qu'une fois la voix et la musique réglées, et jamais quand je bloque la vidéo.
 
-## 6. Pour le monteur (agent 7) et le contrôle qualité (agent 8)
+## 6. Pour le monteur (agent 7) et le contrôle qualité (agent 8) : FAIT (le monteur lit `parseStoredAudioPlan`)
 
 - **`schema.ts` est inchangé** : la sortie du modèle garde son format. L'agent 8 lit `audioJson` avec `outputSchema` (`texte_tts`) ; Zod ignore le bloc ajouté, testé dans `definition.test.ts`.
 - **`audioJson` = sortie normalisée + bloc `production`**, décrit par `audioPlanSchema` (`agents/06-voix-son/audioPlan.ts`, à importer par l'agent 7) :
@@ -51,11 +59,11 @@ Pour la session principale. Rien ici n'a été modifié par le fork.
   - sans storyboard au moment de l'appel, `effets[].plan` vaut `B1`, `B2`… (numéro du beat) au lieu d'un id de plan : le monteur doit accepter les deux.
 - Les Assets VOICE et MUSIC existent aussi (avec licence pour la musique), lus par l'agent 8 dans `formatAudioPlan`.
 
-## 7. Suggestion de prompt (seulement avec ton accord)
+## 7. Suggestion de prompt (seulement avec ton accord) : EN ATTENTE de ta décision
 
 - Le prompt dit « propose des coupes » sans en fixer la forme. Le code exige que chaque coupe **recopie exactement** un passage de `texte_tts` (refus renvoyé au modèle sinon), pour pouvoir l'appliquer en code. Une phrase dans `prompt.md` (« chaque coupe recopie mot pour mot le passage à supprimer ») éviterait des relances. Je n'ai pas modifié `prompt.md`.
 
-## 8. Divers
+## 8. Divers : régénération au montage FAIT (`restartEdit`) ; plafond mensuel EN ATTENTE
 
 - **Plafond mensuel** (`BUDGET_MENSUEL`) : non vérifié ici, comme pour l'agent 5 (à faire dans le worker ou les providers, pour tous les agents).
 - **Régénérer la voix au montage** : le panneau le permet (avant le rendu). Si l'agent 7 a déjà produit sa timeline, elle garde l'ancienne voix : relancer le montage après une régénération à l'étape `EDIT` (à décider côté pipeline).

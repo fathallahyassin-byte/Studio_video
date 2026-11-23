@@ -1,12 +1,17 @@
 import { getDb } from "@/lib/db";
-import type { Stage } from "@/lib/generated/prisma/client";
+import { z } from "zod";
+import { Prisma, type PrismaClient, type Stage } from "@/lib/generated/prisma/client";
 import { toInputJson } from "@/lib/json";
 import { getPipelineDeps } from "@/lib/pipeline/deps";
 import { blockVideo, completeStage, restartEdit, type Actor, type EditRestart } from "@/lib/pipeline/service";
 import { parseStoredOutput, type AudioPlan, type TrackJson } from "./audioPlan";
 import { assertLicensed, type MusicLibrary, type MusicStore } from "./music";
 import type { Output } from "./schema";
-import type { VoiceStore, VoiceTools } from "./voice";
+import { getMusicLibrary } from "@/lib/providers/music";
+import type { WordTiming } from "@/lib/providers/media";
+import { getSttProvider } from "@/lib/providers/stt";
+import { getTtsProvider } from "@/lib/providers/tts";
+import type { StoredVoice, VoiceRecord, VoiceStore, VoiceTools } from "./voice";
 
 // Accès à la base, au pipeline, au budget et aux fournisseurs. Remplacés par des faux dans les tests.
 
@@ -43,34 +48,80 @@ export type AudioPorts = {
 export const VOICE_ACTOR: Actor = { kind: "agent", agentId: 6 };
 export const MANUAL_PROVIDER = "choix manuel";
 
-/**
- * Fournisseurs branchés. Aucun moteur TTS, aucun Whisper ni aucune banque de musique n'existe encore
- * dans lib/providers (étape 5 de la feuille de route) : la session principale les ajoutera ici (voir NEEDS.md).
- */
+/** Fournisseurs branchés, lus dans lib/providers (aucun pour l'instant : fournisseurs payants, à choisir). */
 export function configuredAudioTools(): AudioTools {
-  return { tts: null, stt: null, music: null };
+  return { tts: getTtsProvider(), stt: getSttProvider(), music: getMusicLibrary() };
 }
 
-/**
- * Voix sans fournisseur : rien à retrouver. `recordVoice` et `recordTimings` ne sont jamais atteints tant
- * qu'aucun TTS n'est branché ; ils demandent la clé unique et l'horodatage sur Asset décrits dans NEEDS.md.
- */
-export function createUnconfiguredVoiceStore(): VoiceStore {
-  const missing = () => new Error("Enregistrement des voix générées non branché : il faut Asset.generationKey et l'horodatage (voir agents/06-voix-son/NEEDS.md).");
+const wordTimingsSchema = z.array(z.object({ word: z.string(), startS: z.number(), endS: z.number() }));
+
+/** Horodatage stocké sur l'Asset ; null s'il manque ou est illisible (il sera alors redemandé à Whisper). */
+export function readWordTimings(value: unknown): WordTiming[] | null {
+  const parsed = wordTimingsSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+function readTimingSource(value: string | null): StoredVoice["timingSource"] {
+  return value === "tts" || value === "stt" ? value : null;
+}
+
+/** Voix générées : un Asset VOICE par clé (vidéo, tentative, empreinte), avec son horodatage, et leur coût sur la vidéo. */
+export function createPrismaVoiceStore(db: PrismaClient): VoiceStore {
   return {
-    async findVoice() {
-      return null;
+    async findVoice(key) {
+      const asset = await db.asset.findUnique({
+        where: { generationKey: key },
+        select: { type: true, url: true, provider: true, durationS: true, wordTimings: true, timingSource: true },
+      });
+      if (asset?.type !== "VOICE" || asset.durationS === null) return null;
+      const words = readWordTimings(asset.wordTimings);
+      return { key, url: asset.url, provider: asset.provider, durationS: asset.durationS, words, timingSource: words ? readTimingSource(asset.timingSource) : null };
     },
     async countVoices(videoId) {
-      return getDb().asset.count({ where: { videoId, type: "VOICE" } });
+      return db.asset.count({ where: { videoId, type: "VOICE" } });
     },
-    async recordVoice() {
-      throw missing();
+    async recordVoice(record) {
+      await recordVoiceAsset(db, record);
     },
-    async recordTimings() {
-      throw missing();
+    async recordTimings(key, words, cost) {
+      await recordVoiceTimings(db, key, words, cost);
     },
   };
+}
+
+/** Une clé déjà enregistrée (deux workers, reprise) n'ajoute ni Asset ni coût : la transaction est annulée. */
+async function recordVoiceAsset(db: PrismaClient, record: VoiceRecord): Promise<void> {
+  try {
+    await db.$transaction([
+      db.asset.create({
+        data: {
+          videoId: record.videoId,
+          type: "VOICE",
+          url: record.url,
+          provider: record.provider,
+          durationS: record.durationS,
+          generationKey: record.key,
+          wordTimings: record.words ? toInputJson(record.words) : Prisma.DbNull,
+          timingSource: record.words ? record.timingSource : null,
+        },
+      }),
+      db.video.update({ where: { id: record.videoId }, data: { totalCost: { increment: record.cost } } }),
+    ]);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return;
+    throw error;
+  }
+}
+
+/** Horodatage Whisper : écrit une seule fois (une reprise n'ajoute pas son coût deux fois). */
+async function recordVoiceTimings(db: PrismaClient, key: string, words: WordTiming[], cost: number): Promise<void> {
+  await db.$transaction(async (tx) => {
+    const asset = await tx.asset.findUnique({ where: { generationKey: key }, select: { videoId: true, wordTimings: true } });
+    if (!asset) throw new Error(`Voix ${key} introuvable : impossible d'enregistrer son horodatage.`);
+    if (readWordTimings(asset.wordTimings)) return;
+    await tx.asset.update({ where: { generationKey: key }, data: { wordTimings: toInputJson(words), timingSource: "stt" } });
+    if (cost > 0) await tx.video.update({ where: { id: asset.videoId }, data: { totalCost: { increment: cost } } });
+  });
 }
 
 /** « choix manuel · Titre » : le titre saisi par l'humain reste lisible dans Asset.provider. */
@@ -144,7 +195,7 @@ export function createPrismaAudioPorts(): AudioPorts {
     },
     budgets: () => readBudgets(),
     tools: configuredAudioTools(),
-    voices: createUnconfiguredVoiceStore(),
+    voices: createPrismaVoiceStore(getDb()),
     music: createPrismaMusicStore(),
   };
 }

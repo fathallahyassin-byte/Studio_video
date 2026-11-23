@@ -1,29 +1,10 @@
+import type { MusicLibrary, MusicQuery, MusicTrack } from "@/lib/providers/music";
 import type { Output } from "./schema";
 import type { TrackJson } from "./audioPlan";
 
-// Choix de la musique. Aucune banque de musique n'existe dans lib/providers : l'interface est déclarée ici
-// (à déplacer dans lib/providers/music.ts, voir NEEDS.md). Règle : jamais de piste ni d'Asset MUSIC sans licence.
+// Choix de la musique (interface de la banque : lib/providers/music.ts). Règle : jamais de piste ni d'Asset MUSIC sans licence.
 
-export type MusicTrack = {
-  id: string;
-  title: string;
-  url: string;
-  /** texte de la licence ; null ou vide = piste refusée */
-  license: string | null;
-  /** la licence couvre l'usage commercial sur TikTok, Instagram et YouTube */
-  commercialUse: boolean;
-  durationS: number | null;
-  bpm: number | null;
-  /** coût dans la monnaie des budgets (0 pour une bibliothèque libre de droits) */
-  cost: number;
-};
-
-export type MusicQuery = { keywords: string[]; mood: string; instruments: string[]; bpm: number; minDurationS: number };
-
-export type MusicLibrary = {
-  readonly name: string;
-  search(query: MusicQuery): Promise<MusicTrack[]>;
-};
+export type { MusicLibrary, MusicQuery, MusicTrack } from "@/lib/providers/music";
 
 /** Pistes enregistrées en Asset MUSIC (choix de l'humain ou de la banque). */
 export type MusicStore = {
