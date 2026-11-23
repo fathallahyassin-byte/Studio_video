@@ -44,10 +44,10 @@ La page générique (en-tête, modèle, éditeur de prompt, historique des Agent
 
 ## Critères d'acceptation
 
-- [ ] `definition.ts` exporte une `AgentDefinition` conforme à `agents/_shared/types.ts`.
-- [ ] La sortie est validée par `schema.ts`, avec 2 relances maximum, puis `NEEDS_FIX`.
-- [ ] Chaque appel crée un AgentRun (prompt, bible, entrée, sortie, tokens, coût).
-- [ ] Aucune Publication ne peut être créée sans Validation V3 approuvée (testé).
-- [ ] Les étiquettes IA du rapport qualité ne peuvent pas être décochées depuis cette page.
-- [ ] Tests Vitest : un exemple de sortie valide, un invalide, et les contrôles en code ci-dessus.
-- [ ] `ui/Panel.tsx` suit la maquette (police Archivo, noir, fond #F6F7F4, jaune #FFD60A réservé à ce qui attend une action).
+- [x] `definition.ts` exporte une `AgentDefinition` conforme à `agents/_shared/types.ts`.
+- [x] La sortie est validée par `schema.ts`, avec 2 relances maximum, puis `NEEDS_FIX`.
+- [x] Chaque appel crée un AgentRun (prompt, bible, entrée, sortie, tokens, coût).
+- [x] Aucune Publication ne peut être créée sans Validation V3 approuvée (testé).
+- [x] Les étiquettes IA du rapport qualité ne peuvent pas être décochées depuis cette page.
+- [x] Tests Vitest : un exemple de sortie valide, un invalide, et les contrôles en code ci-dessus.
+- [x] `ui/Panel.tsx` suit la maquette (police Archivo, noir, fond #F6F7F4, jaune #FFD60A réservé à ce qui attend une action).
