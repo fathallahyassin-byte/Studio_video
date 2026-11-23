@@ -2,6 +2,16 @@
 
 Une entrée par décision, la plus récente en haut.
 
+## 2026-11-23 — Besoins du fork de l'agent 1 (stratège de niche)
+- Contexte : `agents/01-strategiste-niche/NEEDS.md`.
+- Décision :
+  - `requestStrategy` (`lib/pipeline/service.ts`) met en file la tâche de l'agent 1 avec le formulaire en payload ; la clé (une par formulaire et par jour) vient de l'agent.
+  - `activateBibleVersion` (`lib/bible/store.ts`) est la seule écriture qui remet une version en service : écran Bible et « Adopter cette bible » l'appellent.
+  - `BibleVersion.sourceJobId` (unique, sans clé étrangère pour ne pas bloquer un futur nettoyage des tâches) relie un brouillon à la tâche qui l'a produit : `onSuccess` de l'agent 1 est idempotent en base.
+  - Rappel mensuel : table `Reminder` (clé unique par chaîne et par mois), écrite avant l'envoi de la notification ; type de notification `reminder`. Le rappel n'est pas une tâche : le formulaire doit être relu par l'humain.
+  - `AgentInputError` (sous-classe d'`AgentPreconditionError`) : entrée de tâche invalide, la tâche échoue tout de suite avec une alerte au lieu d'être réessayée toutes les heures.
+- Alternatives écartées : marquer le brouillon par sa note (idempotence non garantie en base) ; garder le dernier rappel dans `Agent.settings` (lecture-écriture non atomique, une valeur pour toutes les chaînes) ; mettre une tâche en file chaque mois avec le dernier formulaire (l'analyse coûte et les contraintes changent).
+
 ## 2026-11-23 — Rendu Remotion sur le worker, stockage S3, besoins du monteur (agent 7)
 - Contexte : `agents/07-monteur/NEEDS.md` et étape 6 de la feuille de route. Choix du propriétaire : rendu sur la machine du worker (pas Remotion Lambda), stockage S3 branché tout de suite.
 - Décision :

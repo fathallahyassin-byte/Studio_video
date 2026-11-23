@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AgentPreconditionError } from "@/lib/agents/errors";
+import { AgentInputError } from "@/lib/agents/errors";
 import { splitLines } from "@/lib/bible/bible";
 
 // Entrées du formulaire de la page de l'agent 1, transmises au worker dans AgentJob.payload.
@@ -23,12 +23,12 @@ export const strategyPayloadSchema = z.object({
 
 export type StrategyPayload = z.infer<typeof strategyPayloadSchema>;
 
-/** Lecture côté worker : un payload invalide arrête tout avant l'appel au modèle. */
+/** Lecture côté worker : un payload invalide arrête tout avant l'appel au modèle, et la tâche échoue sans nouvel essai. */
 export function readStrategyPayload(payload: unknown): StrategyPayload {
   const parsed = strategyPayloadSchema.safeParse(payload);
   if (parsed.success) return parsed.data;
   const fields = [...new Set(parsed.error.issues.map((issue) => issue.path.join(".") || "payload"))].join(", ");
-  throw new AgentPreconditionError(`Formulaire du stratège invalide (${fields}) : relance l'analyse depuis sa page.`);
+  throw new AgentInputError(`Formulaire du stratège invalide (${fields}) : relance l'analyse depuis sa page.`);
 }
 
 /** « 12,5 » comme « 12.5 » ; vide → NaN (refusé). */

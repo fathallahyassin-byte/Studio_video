@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { AgentJobInput } from "@/agents/_shared/types";
-import { AgentPreconditionError } from "@/lib/agents/errors";
+import { AgentInputError } from "@/lib/agents/errors";
 import { createMemoryRunStore } from "@/lib/agents/memoryStore";
 import { runAgent } from "@/lib/agents/runAgent";
 import type { LlmProvider, LlmRequest } from "@/lib/providers/llm";
@@ -78,7 +78,8 @@ describe("stratège de niche avec runAgent (faux LLM)", () => {
       input: { PISTES_NICHES: expect.stringContaining("inventions ratées"), MODELE_BIBLE: BIBLE_TEMPLATE },
     });
     expect(ctx.world.versions).toEqual([{ id: "bible-1", channelId: CHANNEL_ID, version: 1, content: fillTemplate(), author: "AGENT_1" }]);
-    expect(ctx.world.notes.get("bible-1")).toBe(draftNote("Histoire cachée des objets", "job-1"));
+    expect(ctx.world.notes.get("bible-1")).toBe(draftNote("Histoire cachée des objets"));
+    expect(ctx.world.sourceJobs.get("bible-1")).toBe("job-1");
     expect(ctx.world.activeBibleId).toBeNull();
     expect(ctx.sent).toEqual([]);
     expect(ctx.world.notified).toEqual([{ draft: { id: "bible-1", version: 1 }, niche: "Histoire cachée des objets" }]);
@@ -131,9 +132,9 @@ describe("stratège de niche avec runAgent (faux LLM)", () => {
     expect(ctx.world.versions).toHaveLength(1);
   });
 
-  it("payload invalide : AgentPreconditionError, aucun appel, aucun AgentRun", async () => {
+  it("payload invalide : AgentInputError (la tâche échouera sans nouvel essai), aucun appel, aucun AgentRun", async () => {
     const ctx = setup([json(makeOutput())], { payload: { ...PAYLOAD, heuresParSemaine: "beaucoup" } });
-    await expect(ctx.run()).rejects.toBeInstanceOf(AgentPreconditionError);
+    await expect(ctx.run()).rejects.toBeInstanceOf(AgentInputError);
     expect(ctx.llm.requests).toEqual([]);
     expect(ctx.store.runs).toEqual([]);
   });
