@@ -92,7 +92,7 @@ export function missingPlanIds(timeline: Pick<Output, "pistes">): string[] {
 }
 
 export function missingMediaAlert(planIds: readonly string[]): string {
-  return `Média manquant pour ${planIds.join(", ")} : à fournir avant le rendu.`;
+  return `Média manquant pour ${planIds.join(", ")} : ajoute son fichier dans la page du directeur artistique (« Ajouter le fichier du plan »), puis relance l'étape.`;
 }
 
 export const NO_MUSIC_ALERT = "Aucune musique sous licence enregistrée : montage sans musique.";

@@ -3,6 +3,8 @@ import { requireCurrentChannel } from "@/lib/dashboard/context";
 import { getDb } from "@/lib/db";
 import { configuredVisualTools } from "../ports";
 import { loadStoryboardOverview, readPanelBudget } from "./loadStoryboards";
+import { isStorageConfigured } from "@/lib/providers/storage";
+import type { UploadAvailability } from "./PlanFileForm";
 import { StoryboardBrowser, type RegenerationAvailability } from "./StoryboardBrowser";
 import { regenerationAvailability, summaryLine } from "./summary";
 
@@ -13,6 +15,9 @@ export async function Panel() {
   const tools = configuredVisualTools();
   const { storyboards, inProgress, unreadable, budgetS } = await loadStoryboardOverview(getDb(), channel.id, readPanelBudget());
   const regeneration: RegenerationAvailability = regenerationAvailability({ image: tools.image?.name ?? null, video: tools.video?.name ?? null });
+  const uploads: UploadAvailability = isStorageConfigured()
+    ? { enabled: true, note: null }
+    : { enabled: false, note: "Configure le stockage S3 (S3_* dans .env.local) pour ajouter le fichier d'un plan." };
 
   return (
     <Card className="flex flex-col gap-5">
@@ -24,7 +29,7 @@ export async function Panel() {
       {storyboards.length === 0 ? (
         <p className="text-muted">Aucun storyboard pour l&apos;instant : il arrive dès qu&apos;un script est validé en V2.</p>
       ) : (
-        <StoryboardBrowser storyboards={storyboards} regeneration={regeneration} />
+        <StoryboardBrowser storyboards={storyboards} regeneration={regeneration} uploads={uploads} />
       )}
     </Card>
   );

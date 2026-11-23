@@ -23,10 +23,11 @@ Pour la session principale. État au 22 novembre 2026 : 2, 5 et 6 sont faits ; 1
 - **Quoi** : que `generate` (ou un adaptateur autour) copie le fichier du fournisseur dans le stockage S3 (`S3_*` de `.env.example`) et renvoie l'URL durable.
 - **Pourquoi** : les URL des fournisseurs expirent souvent ; le monteur (agent 7), le rendu et le panneau lisent `Asset.url`. Le panneau affiche l'image avec `next/image` en `unoptimized` (pas de `remotePatterns` à configurer) et la vidéo avec `<video>`.
 
-## 4. Séquences « stock » (banque libre de droits) : EN ATTENTE (décision du propriétaire)
+## 4. Séquences « stock » (banque libre de droits) : EN PARTIE FAIT (ajout à la main ; banque en attente de ta décision)
 
 - **Quoi** : une interface de recherche de séquences libres de droits (ex. `lib/providers/stock.ts`), ou une décision : l'humain ou le monteur source ces plans à partir de `mots_cles_stock`.
 - **Pourquoi** : le prompt prévoit le type `stock`, mais `lib/providers/` n'a rien pour le sourcer. Aujourd'hui ces plans sont enregistrés « À sourcer (mots-clés) » et ne génèrent rien. Il faudra aussi y enregistrer la licence de chaque séquence (CLAUDE.md §8).
+- **Intégré** : « Ajouter le fichier du plan » (`upload.ts`, `ui/PlanFileForm.tsx`) : l'humain source la séquence à partir des mots-clés et l'envoie avec sa licence (obligatoire) ; elle devient l'`Asset` du plan, utilisé par le monteur. Une banque branchée automatiquement reste à décider.
 
 ## 5. Storyboard et plan sonore périmés à la reprise de VISUALS_AND_AUDIO : FAIT
 

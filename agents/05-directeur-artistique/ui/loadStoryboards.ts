@@ -1,5 +1,6 @@
 import { formatDateTime, formatVideoNumber } from "@/lib/dashboard/format";
 import { Prisma, type PrismaClient, type Stage } from "@/lib/generated/prisma/client";
+import { MANUAL_PROVIDER } from "../upload";
 import { parseAmount } from "../variables";
 import { latestAssets, toStoryboardView, type PlanAsset, type StoryboardRow, type StoryboardView } from "./storyboards";
 
@@ -48,10 +49,12 @@ async function loadPlanAssets(db: PrismaClient, videoIds: string[]): Promise<(Pl
   const assets = await db.asset.findMany({
     where: { videoId: { in: videoIds }, type: { in: ["IMAGE", "VIDEO"] }, planId: { not: null } },
     orderBy: { createdAt: "desc" },
-    select: { videoId: true, planId: true, type: true, url: true },
+    select: { videoId: true, planId: true, type: true, url: true, provider: true },
   });
   return assets.flatMap((asset) =>
-    asset.planId !== null && (asset.type === "IMAGE" || asset.type === "VIDEO") ? [{ videoId: asset.videoId, planId: asset.planId, kind: asset.type, url: asset.url }] : [],
+    asset.planId !== null && (asset.type === "IMAGE" || asset.type === "VIDEO")
+      ? [{ videoId: asset.videoId, planId: asset.planId, kind: asset.type, url: asset.url, manual: asset.provider === MANUAL_PROVIDER }]
+      : [],
   );
 }
 

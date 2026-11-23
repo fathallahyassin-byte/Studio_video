@@ -7,6 +7,7 @@ import { buttonClass, Chip, FieldLabel, fieldClass, FormMessage, PendingNote } f
 import { useKeptForm } from "@/components/useKeptForm";
 import { regeneratePlanAction, type RegenerateFormState } from "./actions";
 import { MAX_PROMPT_LENGTH } from "./limits";
+import { PlanFileForm, type UploadAvailability } from "./PlanFileForm";
 import type { BudgetView, PlanView, StoryboardView } from "./storyboards";
 
 // Liste des storyboards à gauche, grille de plans 9:16 à droite. Le jaune ne sert qu'à ce qui attend l'humain.
@@ -15,14 +16,14 @@ const textWrap = "[overflow-wrap:anywhere]";
 
 export type RegenerationAvailability = { enabled: boolean; note: string | null };
 
-export function StoryboardBrowser({ storyboards, regeneration }: { storyboards: StoryboardView[]; regeneration: RegenerationAvailability }) {
+export function StoryboardBrowser({ storyboards, regeneration, uploads }: { storyboards: StoryboardView[]; regeneration: RegenerationAvailability; uploads: UploadAvailability }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = storyboards.find((storyboard) => storyboard.videoId === selectedId) ?? storyboards[0] ?? null;
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)]">
       <StoryboardList storyboards={storyboards} selectedId={selected?.videoId ?? null} onSelect={setSelectedId} />
-      {selected ? <StoryboardDetail key={selected.videoId} storyboard={selected} regeneration={regeneration} /> : null}
+      {selected ? <StoryboardDetail key={selected.videoId} storyboard={selected} regeneration={regeneration} uploads={uploads} /> : null}
     </div>
   );
 }
@@ -57,11 +58,12 @@ function StoryboardList({ storyboards, selectedId, onSelect }: { storyboards: St
   );
 }
 
-function StoryboardDetail({ storyboard, regeneration }: { storyboard: StoryboardView; regeneration: RegenerationAvailability }) {
+function StoryboardDetail({ storyboard, regeneration, uploads }: { storyboard: StoryboardView; regeneration: RegenerationAvailability; uploads: UploadAvailability }) {
   const titleId = useId();
   const canRegenerate: RegenerationAvailability = storyboard.editable
     ? regeneration
     : { enabled: false, note: "Le rendu est lancé ou passé : un plan ne se régénère plus à cette étape." };
+  const canUpload: UploadAvailability = storyboard.editable ? uploads : { enabled: false, note: "Le rendu est lancé ou passé : le fichier d'un plan ne se change plus à cette étape." };
   return (
     <article aria-labelledby={titleId} className="flex min-w-0 flex-col gap-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -86,7 +88,7 @@ function StoryboardDetail({ storyboard, regeneration }: { storyboard: Storyboard
       <ol aria-label="Plans" className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 xl:grid-cols-3">
         {storyboard.plans.map((plan) => (
           <li key={plan.id} className="min-w-0">
-            <PlanCard videoId={storyboard.videoId} plan={plan} regeneration={canRegenerate} />
+            <PlanCard videoId={storyboard.videoId} plan={plan} regeneration={canRegenerate} uploads={canUpload} />
           </li>
         ))}
       </ol>
@@ -147,7 +149,7 @@ function Characters({ characters }: { characters: StoryboardView["recurringChara
   );
 }
 
-function PlanCard({ videoId, plan, regeneration }: { videoId: string; plan: PlanView; regeneration: RegenerationAvailability }) {
+function PlanCard({ videoId, plan, regeneration, uploads }: { videoId: string; plan: PlanView; regeneration: RegenerationAvailability; uploads: UploadAvailability }) {
   return (
     <div className="flex h-full flex-col gap-3 rounded-2xl bg-white p-3 shadow-[inset_0_0_0_1px_var(--color-line)]">
       <Thumbnail plan={plan} />
@@ -165,7 +167,10 @@ function PlanCard({ videoId, plan, regeneration }: { videoId: string; plan: Plan
       {plan.prompt ? <PromptText label="Prompt" text={plan.prompt} /> : null}
       {plan.negativePrompt ? <PromptText label="Négatif" text={plan.negativePrompt} /> : null}
       {plan.stockKeywords.length > 0 ? <PromptText label="Mots-clés" text={plan.stockKeywords.join(", ")} /> : null}
-      {plan.regenerable ? <RegenerateForm videoId={videoId} plan={plan} regeneration={regeneration} /> : null}
+      <div className="mt-auto flex flex-col gap-2">
+        {plan.regenerable ? <RegenerateForm videoId={videoId} plan={plan} regeneration={regeneration} /> : null}
+        {plan.acceptsFile ? <PlanFileForm videoId={videoId} planId={plan.id} hasFile={plan.media.url !== null} uploads={uploads} /> : null}
+      </div>
     </div>
   );
 }
@@ -200,7 +205,7 @@ function RegenerateForm({ videoId, plan, regeneration }: { videoId: string; plan
   const promptId = useId();
   const { state, pending, onSubmit } = useKeptForm<RegenerateFormState>(regeneratePlanAction, null);
   return (
-    <details className="mt-auto rounded-xl bg-paper p-3">
+    <details className="rounded-xl bg-paper p-3">
       <summary className="cursor-pointer text-[14px] font-bold text-ink">Modifier le prompt et régénérer</summary>
       <form onSubmit={onSubmit} className="mt-3 flex flex-col gap-2">
         <input type="hidden" name="videoId" value={videoId} />
