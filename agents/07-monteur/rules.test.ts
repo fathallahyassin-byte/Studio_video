@@ -83,7 +83,7 @@ describe("normalize", () => {
       ["P03", "", true],
       ["P04", MEDIA_URLS.P04, false],
     ]);
-    expect(result.alertes).toContain("Média manquant pour P03 : à fournir avant le rendu.");
+    expect(result.alertes).toContain("Média manquant pour P03 : ajoute son fichier dans la page du directeur artistique (« Ajouter le fichier du plan »), puis relance l'étape.");
   });
 
   it("referme les petits écarts d'arrondi et prolonge le dernier plan jusqu'à la fin", () => {

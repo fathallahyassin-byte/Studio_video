@@ -16,7 +16,7 @@ const row: StoryboardRow = {
 
 describe("toStoryboardView", () => {
   it("une vignette par plan : type, durée, prompt, label IA, état du média", () => {
-    const view = toStoryboardView(row, [{ planId: "P02", kind: "IMAGE", url: "https://media.test/p02.png" }], 12);
+    const view = toStoryboardView(row, [{ planId: "P02", kind: "IMAGE", url: "https://media.test/p02.png", manual: false }], 12);
     expect(view?.plans).toHaveLength(8);
     expect(view?.plans[0]).toMatchObject({ id: "P01", typeLabel: "Vidéo IA", durationLabel: "3 s", timeLabel: "0–3 s", aiLabel: true, isCover: true, regenerable: true });
     expect(view?.plans[1]).toMatchObject({ id: "P02", durationLabel: "2,5 s", media: { state: "generated", url: "https://media.test/p02.png", kind: "IMAGE" } });
@@ -24,6 +24,13 @@ describe("toStoryboardView", () => {
     expect(view?.plans[3]).toMatchObject({ id: "P04", media: { state: "edit" } });
     expect(view?.plans[4]?.media.state).toBe("to_generate");
     expect(view).toMatchObject({ status: { tone: "ok", notice: null }, editable: true });
+  });
+
+  it("fichier ajouté à la main : affiché pour un plan stock ; tout plan sauf le texte animé accepte un fichier", () => {
+    const view = toStoryboardView(row, [{ planId: "P03", kind: "VIDEO", url: "https://media.test/p03.mp4", manual: true }], 12);
+    expect(view?.plans[2]).toMatchObject({ id: "P03", acceptsFile: true, media: { state: "provided", label: "Fichier ajouté", url: "https://media.test/p03.mp4", kind: "VIDEO" } });
+    expect(view?.plans[3]).toMatchObject({ id: "P04", acceptsFile: false });
+    expect(view?.plans[0]?.acceptsFile).toBe(true);
   });
 
   it("total de vidéo IA recalculé et comparé au budget", () => {
@@ -52,11 +59,11 @@ describe("toStoryboardView", () => {
 describe("latestAssets", () => {
   it("garde le média le plus récent de chaque plan de la vidéo", () => {
     const assets = [
-      { videoId: "video-1", planId: "P01", kind: "VIDEO" as const, url: "recent" },
-      { videoId: "video-1", planId: "P01", kind: "VIDEO" as const, url: "ancien" },
-      { videoId: "video-2", planId: "P02", kind: "IMAGE" as const, url: "autre vidéo" },
+      { videoId: "video-1", planId: "P01", kind: "VIDEO" as const, url: "recent", manual: false },
+      { videoId: "video-1", planId: "P01", kind: "VIDEO" as const, url: "ancien", manual: false },
+      { videoId: "video-2", planId: "P02", kind: "IMAGE" as const, url: "autre vidéo", manual: false },
     ];
-    expect(latestAssets(assets, "video-1")).toEqual([{ planId: "P01", kind: "VIDEO", url: "recent" }]);
+    expect(latestAssets(assets, "video-1")).toEqual([{ planId: "P01", kind: "VIDEO", url: "recent", manual: false }]);
   });
 });
 

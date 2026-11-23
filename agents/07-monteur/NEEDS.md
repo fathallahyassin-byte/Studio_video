@@ -1,6 +1,6 @@
 # Besoins de l'agent 7 hors de son dossier
 
-État au 23 novembre 2026 : les points 1, 2, 4 et 6 sont intégrés par la session principale (voir `docs/decisions.md`, « Rendu Remotion sur le worker, stockage S3, besoins du monteur »). Restent ouverts : point 3 (facultatif).
+État au 23 novembre 2026 : les points 1, 2, 4 et 6 sont intégrés par la session principale (voir `docs/decisions.md`, « Rendu Remotion sur le worker, stockage S3, besoins du monteur »), ainsi que l'ajout du fichier d'un plan (point 3, « Fichier d'un plan ajouté à la main »). Reste ouvert : les effets sonores (point 3, facultatif).
 
 ## 1. Rendu Remotion — intégré
 
@@ -23,7 +23,8 @@
 - **Voix ou horodatage mot à mot absents → précondition (aucun appel au modèle).** Le worker garde la tâche, réessaie toutes les heures et alerte une fois. Le panneau liste ces vidéos sous « Montages en attente ».
 - **Fichier visuel d'un plan absent** : `{{MEDIAS}}` dit « MANQUANT » au modèle, `src`/`manquant` sont imposés en code depuis les `Asset`, puis `onSuccess` enregistre la timeline et bloque la vidéo au montage avec la liste des plans. « Relancer l'étape » refait le montage une fois les fichiers ajoutés. Aujourd'hui tout plan `stock`, `image_ia_animee` ou `video_ia` est dans ce cas (aucun générateur ni banque branché : `agents/05-directeur-artistique/NEEDS.md` § 1 et § 4).
 - **Musique** : utilisée seulement avec une licence ; sinon montage sans musique et alerte. **Effets sonores** : aucun fichier d'effet n'existe, ils ne sont pas placés et une alerte les compte.
-- **Ouvert (facultatif)** : un moyen pour l'humain d'ajouter le fichier d'un plan (upload vers S3 → `Asset` IMAGE/VIDEO avec `planId` et licence), et un type d'`Asset` (ou une banque) pour les effets sonores.
+- **Fichier d'un plan ajouté à la main — intégré** : « Ajouter le fichier du plan » dans le panneau du directeur artistique (`agents/05-directeur-artistique/upload.ts`) : envoi au stockage S3, `Asset` IMAGE/VIDEO avec `planId` et licence obligatoire. Le message de blocage « Média manquant » y renvoie.
+- **Ouvert (facultatif)** : un type d'`Asset` (ou une banque) pour les effets sonores.
 
 ## 4. Livrable de l'agent 6 — intégré
 

@@ -107,7 +107,7 @@ describe("monteur avec runAgent (faux LLM, fausse base)", () => {
     const ctx = setup([json(makeTimeline())], { assets: makeAssets().filter((asset) => asset.planId !== "P02") });
     expect(await ctx.run()).toMatchObject({ status: "ok" });
     expect(ctx.calls.saved[0]?.pistes.video.find((clip) => clip.plan === "P02")).toMatchObject({ src: "", manquant: true });
-    expect(ctx.calls.blocked).toEqual(["Monteur : Média manquant pour P02 : à fournir avant le rendu."]);
+    expect(ctx.calls.blocked).toEqual(["Monteur : Média manquant pour P02 : ajoute son fichier dans la page du directeur artistique (« Ajouter le fichier du plan »), puis relance l'étape."]);
     expect(ctx.calls.completed).toBe(0);
     expect(ctx.video).toMatchObject({ stage: "NEEDS_FIX", blockedAt: "EDIT" });
   });

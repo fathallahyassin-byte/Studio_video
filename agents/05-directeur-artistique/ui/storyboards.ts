@@ -18,9 +18,9 @@ export type StoryboardRow = {
 };
 
 /** Dernier média enregistré pour un plan (Asset IMAGE ou VIDEO). */
-export type PlanAsset = { planId: string; kind: "IMAGE" | "VIDEO"; url: string };
+export type PlanAsset = { planId: string; kind: "IMAGE" | "VIDEO"; url: string; /** fichier ajouté à la main (pas généré) */ manual: boolean };
 
-export type MediaState = "generated" | "to_generate" | "edit" | "to_source";
+export type MediaState = "generated" | "provided" | "to_generate" | "edit" | "to_source";
 
 export type PlanView = {
   id: string;
@@ -37,6 +37,8 @@ export type PlanView = {
   aiLabel: boolean;
   isCover: boolean;
   regenerable: boolean;
+  /** plan qui demande un fichier (tout sauf le texte animé) : « Ajouter le fichier du plan » */
+  acceptsFile: boolean;
   media: { state: MediaState; label: string; url: string | null; kind: "IMAGE" | "VIDEO" | null };
 };
 
@@ -79,9 +81,11 @@ export function toBudgetView(plans: readonly Plan[], budgetS: number | null): Bu
 
 function mediaOf(plan: Plan, assets: readonly PlanAsset[]): PlanView["media"] {
   if (plan.type === "texte_anime") return { state: "edit", label: "Fait au montage", url: null, kind: null };
-  if (plan.type === "stock") return { state: "to_source", label: "À sourcer (mots-clés)", url: null, kind: null };
   const asset = assets.find((entry) => entry.planId === plan.id);
-  return asset ? { state: "generated", label: "Généré", url: asset.url, kind: asset.kind } : { state: "to_generate", label: "Pas encore généré", url: null, kind: null };
+  if (asset?.manual) return { state: "provided", label: "Fichier ajouté", url: asset.url, kind: asset.kind };
+  if (asset) return { state: "generated", label: "Généré", url: asset.url, kind: asset.kind };
+  if (plan.type === "stock") return { state: "to_source", label: "À sourcer (mots-clés)", url: null, kind: null };
+  return { state: "to_generate", label: "Pas encore généré", url: null, kind: null };
 }
 
 export function toPlanView(plan: Plan, assets: readonly PlanAsset[], coverPlan: string): PlanView {
@@ -100,6 +104,7 @@ export function toPlanView(plan: Plan, assets: readonly PlanAsset[], coverPlan: 
     aiLabel: plan.label_ia_requis,
     isCover: plan.id === coverPlan,
     regenerable: isGenerated(plan.type),
+    acceptsFile: plan.type !== "texte_anime",
     media: mediaOf(plan, assets),
   };
 }
@@ -148,7 +153,7 @@ export function latestAssets(assets: readonly (PlanAsset & { videoId: string })[
   for (const asset of assets) {
     if (asset.videoId !== videoId || seen.has(asset.planId)) continue;
     seen.add(asset.planId);
-    latest.push({ planId: asset.planId, kind: asset.kind, url: asset.url });
+    latest.push({ planId: asset.planId, kind: asset.kind, url: asset.url, manual: asset.manual });
   }
   return latest;
 }
