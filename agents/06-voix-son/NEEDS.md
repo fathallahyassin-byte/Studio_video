@@ -34,7 +34,7 @@
 
 ## 4. Enregistrer les voix générées : `Asset.generationKey` et horodatage : FAIT
 
-- **Intégré** : colonnes `Asset.wordTimings` et `Asset.timingSource` (migration `20261123120000_voice_word_timings`) ; `createPrismaVoiceStore(db)` dans `ports.ts` remplace `createUnconfiguredVoiceStore()` (Asset VOICE unique par clé + coût sur la vidéo en une transaction ; horodatage Whisper écrit une seule fois, coût compris). Test d'intégration : `ports.integration.test.ts`. `Asset.title` (facultatif) n'est pas fait.
+- **Intégré** : colonnes `Asset.wordTimings` et `Asset.timingSource` (migration `20261123150000_voice_word_timings`) ; `createPrismaVoiceStore(db)` dans `ports.ts` remplace `createUnconfiguredVoiceStore()` (Asset VOICE unique par clé + coût sur la vidéo en une transaction ; horodatage Whisper écrit une seule fois, coût compris). Test d'intégration : `ports.integration.test.ts`. `Asset.title` (facultatif) n'est pas fait.
 
 - **Quoi** : `generationKey String? @unique` sur `Asset` (même besoin que l'agent 5, point 2) et un champ pour l'horodatage, par exemple `wordTimings Json?` (+ migration). Puis une vraie implémentation de `VoiceStore` (`agents/06-voix-son/voice.ts`) à la place de `createUnconfiguredVoiceStore()` dans `ports.ts` :
   - `findVoice(key)` : l'`Asset` VOICE dont `generationKey = key`, avec `url`, `provider`, `durationS`, `wordTimings` (`timingSource` : `"tts"` ou `"stt"`, à stocker aussi, ou dans le même JSON) ;
