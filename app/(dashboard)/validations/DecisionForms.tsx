@@ -41,23 +41,46 @@ export function IdeasDecisionForm({ children }: { children: ReactNode }) {
   );
 }
 
-export function VideoDecisionForm({ videoId, gate, suggestedReturn }: { videoId: string; gate: "V2" | "V3"; suggestedReturn?: V3ReturnStage }) {
+function ReturnStageSelect({ label, defaultValue, hint }: { label: string; defaultValue: V3ReturnStage; hint?: string }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <FieldLabel htmlFor="returnTo">{label}</FieldLabel>
+      <select id="returnTo" name="returnTo" defaultValue={defaultValue} aria-describedby={hint ? "returnTo-hint" : undefined} className={fieldClass}>
+        {V3_RETURN_STAGES.map((stage) => (
+          <option key={stage} value={stage}>
+            {stageLabels[stage]}
+          </option>
+        ))}
+      </select>
+      {hint ? (
+        <p id="returnTo-hint" className="text-[13px] text-muted">
+          {hint}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** Partenariat commercial lu par le contrôle qualité (étiquette « contenu de marque », mentions) : à fixer avant la production. */
+function PartnershipField({ defaultValue }: { defaultValue: string }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <FieldLabel htmlFor="partnership">Partenariat commercial</FieldLabel>
+      <input id="partnership" name="partnership" type="text" maxLength={300} defaultValue={defaultValue} aria-describedby="partnership-hint" className={fieldClass} />
+      <p id="partnership-hint" className="text-[13px] text-muted">
+        Marque et contrepartie, ou « aucun ». Le contrôle qualité en déduit l&apos;étiquette « contenu de marque » et les mentions obligatoires.
+      </p>
+    </div>
+  );
+}
+
+export function VideoDecisionForm({ videoId, gate, suggestedReturn, partnership }: { videoId: string; gate: "V2" | "V3"; suggestedReturn?: V3ReturnStage; partnership?: string }) {
   const { state, pending, onSubmit } = useKeptForm<DecisionState>(decideVideoAction.bind(null, videoId, gate), null);
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-5">
+      {gate === "V2" && partnership !== undefined ? <PartnershipField defaultValue={partnership} /> : null}
       <NoteField hint={gate === "V2" ? "Ex. : accroche plus courte, éviter le mot « secret »" : "Ex. : la dernière phrase doit reprendre le mot « trombone »"} />
-      {gate === "V3" ? (
-        <div className="flex flex-col gap-1.5">
-          <FieldLabel htmlFor="returnTo">En cas de correction, renvoyer à</FieldLabel>
-          <select id="returnTo" name="returnTo" defaultValue={suggestedReturn ?? "EDIT"} className={fieldClass}>
-            {V3_RETURN_STAGES.map((stage) => (
-              <option key={stage} value={stage}>
-                {stageLabels[stage]}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : null}
+      {gate === "V3" ? <ReturnStageSelect label="En cas de correction, renvoyer à" defaultValue={suggestedReturn ?? "EDIT"} /> : null}
       <FormMessage state={state} />
       <Actions pending={pending} approveLabel={gate === "V3" ? "Valider (GO)" : "Valider"} secondaryLabel="Demander une correction" secondaryIntent="changes" />
     </form>
@@ -65,7 +88,7 @@ export function VideoDecisionForm({ videoId, gate, suggestedReturn }: { videoId:
 }
 
 /** `sources` : présent seulement pour une vidéo bloquée en recherche (liens donnés au recherchiste). */
-export function FixForm({ videoId, sources }: { videoId: string; sources?: readonly string[] }) {
+export function FixForm({ videoId, sources, suggestedReturn }: { videoId: string; sources?: readonly string[]; suggestedReturn?: V3ReturnStage | null }) {
   const { state, pending, onSubmit } = useKeptForm<DecisionState>(resolveFixAction.bind(null, videoId), null);
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-5">
@@ -85,6 +108,13 @@ export function FixForm({ videoId, sources }: { videoId: string; sources?: reado
             Sans source fournie, le recherchiste n&apos;invente aucune adresse : ses faits restent « faibles ». Ajoute des liens fiables avant de relancer.
           </p>
         </div>
+      ) : null}
+      {suggestedReturn ? (
+        <ReturnStageSelect
+          label="Relancer à l'étape"
+          defaultValue={suggestedReturn}
+          hint="NO-GO du contrôle qualité : relance l'étape de l'agent responsable (proposée d'après le premier point « ko »). Relancer le contrôle seul redonnerait le même verdict."
+        />
       ) : null}
       <NoteField hint="Ex. : nouvel angle à creuser, source à utiliser" />
       <FormMessage state={state} />

@@ -89,15 +89,17 @@ export type IdeaRow = { videoId: string; number: number; title: string; score: n
 export type QueueDetail =
   | { kind: "ideas"; ideas: IdeaRow[] }
   /** script préparé pour l'affichage (faits du dossier, compteurs) ; null s'il est illisible */
-  | { kind: "script"; videoId: string; review: ScriptContent | null }
+  | { kind: "script"; videoId: string; review: ScriptContent | null; partnership: string }
   /** storyboard : plans de l'agent 5 et leur label IA, à voir avant le GO ; null s'il manque */
   | { kind: "qa"; videoId: string; report: QaReport | null; suggestedReturn: V3ReturnStage; storyboard: StoryboardView | null }
-  | { kind: "fix"; videoId: string; reason: string | null; blockedAt: Stage | null; sources: string[] };
+  /** suggestedReturn : pour un NO-GO du contrôle qualité, étape de l'agent responsable (null pour les autres blocages) */
+  | { kind: "fix"; videoId: string; reason: string | null; blockedAt: Stage | null; sources: string[]; suggestedReturn: V3ReturnStage | null };
 
 /** Étape où renvoyer la vidéo en V3, d'après l'agent responsable du premier point « ko ». */
 export function suggestReturnStage(report: QaReport | null): V3ReturnStage {
   const responsible = report?.controles.find((check) => check.statut === "ko" && check.agent_responsable)?.agent_responsable ?? "";
-  if (responsible.startsWith("04")) return "SCRIPT";
+  // Un fait faux (recherchiste) ou un script à reprendre se corrige au script.
+  if (responsible.startsWith("03") || responsible.startsWith("04")) return "SCRIPT";
   if (responsible.startsWith("05") || responsible.startsWith("06")) return "VISUALS_AND_AUDIO";
   if (responsible.startsWith("08")) return "QA";
   return "EDIT";
@@ -121,6 +123,7 @@ export async function getQueueDetail(db: PrismaClient, item: QueueItem): Promise
       blockedAt: true,
       blockedReason: true,
       researchSources: true,
+      partnership: true,
       channel: { select: { activeBibleVersionId: true } },
     },
   });
@@ -135,9 +138,13 @@ export async function getQueueDetail(db: PrismaClient, item: QueueItem): Promise
   const videoId = video?.id ?? "";
   if (item.gate === "V2") {
     const target = await loadScriptTarget(db, video?.channel.activeBibleVersionId ?? null);
-    return { kind: "script", videoId, review: toScriptContent(video?.scriptJson, video?.dossierJson, target) };
+    return { kind: "script", videoId, review: toScriptContent(video?.scriptJson, video?.dossierJson, target), partnership: video?.partnership ?? "aucun" };
   }
-  if (item.gate === "FIX") return { kind: "fix", videoId, reason: video?.blockedReason ?? null, blockedAt: video?.blockedAt ?? null, sources: video?.researchSources ?? [] };
+  if (item.gate === "FIX") {
+    const blockedAt = video?.blockedAt ?? null;
+    const suggestedReturn = blockedAt === "QA" ? suggestReturnStage(parseQaReport(video?.qaJson)) : null;
+    return { kind: "fix", videoId, reason: video?.blockedReason ?? null, blockedAt, sources: video?.researchSources ?? [], suggestedReturn };
+  }
   const report = parseQaReport(video?.qaJson);
   return { kind: "qa", videoId, report, suggestedReturn: suggestReturnStage(report), storyboard: await loadStoryboardView(db, videoId) };
 }

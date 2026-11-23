@@ -2,6 +2,15 @@
 
 Une entrée par décision, la plus récente en haut.
 
+## 2026-11-23 — Besoins du contrôle qualité (agent 8) : reprise d'un NO-GO, partenariat
+- Contexte : `agents/08-controle-qualite/NEEDS.md`. Un NO-GO bloque la vidéo en `QA` ; « Relancer l'étape » relançait le contrôle et redonnait le même verdict. `Video.partnership` n'était modifiable nulle part.
+- Décision :
+  - `RESUMED` accepte `returnTo` (une des `V3_RETURN_STAGES`) seulement pour une vidéo bloquée en `QA`, refusé pour les autres blocages. Le détail « À corriger » d'un NO-GO propose « Relancer à l'étape », présélectionné d'après l'agent responsable du premier point « ko » (`suggestReturnStage`, qui renvoie désormais un fait faux du recherchiste au script).
+  - Partenariat saisi en V2 (avant toute production : le contrôle qualité le lit dans `{{PARTENARIAT}}`). Champ vide, « non » ou « aucune » = « aucun ».
+  - Le rapport qualité de démonstration a les 16 points de la check-list.
+- Alternatives écartées : saisir le partenariat en V3 (trop tard, le contrôle a déjà tourné) ; relancer automatiquement l'agent responsable au NO-GO (l'humain doit voir le rapport et peut choisir une autre étape).
+- Reste ouvert : transcription Whisper et captures du rendu (`{{TRANSCRIPTION}}`, `{{CAPTURES}}`) ; tant qu'elles manquent, chaque contrôle finit en NO-GO.
+
 ## 2026-11-23 — Besoins du son (agent 6) : voix enregistrées, interfaces TTS, Whisper et musique
 - Contexte : `agents/06-voix-son/NEEDS.md`. Aucun fournisseur de synthèse vocale, de transcription ni de musique n'est choisi (fournisseurs payants : CLAUDE.md §13).
 - Décision :

@@ -7,6 +7,7 @@ import { requireOwner } from "@/lib/auth/owner";
 import { getPipelineDeps, ownerActor } from "@/lib/pipeline/deps";
 import { V3_RETURN_STAGES } from "@/lib/pipeline/machine";
 import { applyEvent, decideIdeas, resumeVideo, TransitionError } from "@/lib/pipeline/service";
+import { MAX_PARTNERSHIP_LENGTH, savePartnership } from "@/lib/videos/partnership";
 import { parseSourceLines } from "@/lib/videos/sources";
 import type { DoneCode } from "./messages";
 
@@ -50,30 +51,39 @@ const videoSchema = z.object({
   intent: z.enum(["approve", "changes"]),
   note,
   returnTo: z.enum(V3_RETURN_STAGES).optional(),
+  partnership: z.string().max(MAX_PARTNERSHIP_LENGTH).optional(),
 });
 
 /** V2 ou V3 : valider, ou renvoyer à un agent avec une note. */
 export async function decideVideoAction(videoId: string, gate: "V2" | "V3", _previous: DecisionState, formData: FormData): Promise<DecisionState> {
-  const parsed = videoSchema.safeParse({ intent: formData.get("intent"), note: formData.get("note") ?? undefined, returnTo: formData.get("returnTo") ?? undefined });
+  const parsed = videoSchema.safeParse({
+    intent: formData.get("intent"),
+    note: formData.get("note") ?? undefined,
+    returnTo: formData.get("returnTo") ?? undefined,
+    partnership: formData.get("partnership") ?? undefined,
+  });
   if (!parsed.success) return { ok: false, message: "Décision illisible : recharge la page." };
   const { intent } = parsed.data;
   if (intent === "changes" && parsed.data.note === "") return { ok: false, message: "Écris dans la note ce que l'agent doit corriger." };
   return guard(async () => {
     const event = gate === "V2" ? (intent === "approve" ? "V2_APPROVED" : "V2_CHANGES_REQUESTED") : intent === "approve" ? "V3_APPROVED" : "V3_CHANGES_REQUESTED";
-    await applyEvent(getPipelineDeps(), { videoId, event, actor: ownerActor(), note: parsed.data.note || null, returnTo: parsed.data.returnTo });
+    const deps = getPipelineDeps();
+    // V2 : le partenariat est fixé avant la production, pour que le contrôle qualité le lise.
+    if (gate === "V2" && parsed.data.partnership !== undefined) await savePartnership(deps.db, videoId, parsed.data.partnership);
+    await applyEvent(deps, { videoId, event, actor: ownerActor(), note: parsed.data.note || null, returnTo: parsed.data.returnTo });
     if (gate === "V2") return intent === "approve" ? "v2-approved" : "v2-changes";
     return intent === "approve" ? "v3-approved" : "v3-changes";
   });
 }
 
-const fixSchema = z.object({ intent: z.enum(["resume", "abandon"]), note });
+const fixSchema = z.object({ intent: z.enum(["resume", "abandon"]), note, returnTo: z.enum(V3_RETURN_STAGES).optional() });
 
 /**
  * Vidéo à corriger : relancer l'étape bloquée, ou abandonner la vidéo.
  * Pour une vidéo bloquée en recherche, les sources saisies sont enregistrées avant la relance.
  */
 export async function resolveFixAction(videoId: string, _previous: DecisionState, formData: FormData): Promise<DecisionState> {
-  const parsed = fixSchema.safeParse({ intent: formData.get("intent"), note: formData.get("note") ?? undefined });
+  const parsed = fixSchema.safeParse({ intent: formData.get("intent"), note: formData.get("note") ?? undefined, returnTo: formData.get("returnTo") ?? undefined });
   if (!parsed.success) return { ok: false, message: "Choisis « Relancer l'étape » ou « Abandonner la vidéo »." };
   const resume = parsed.data.intent === "resume";
   const rawSources = formData.get("sources");
@@ -86,7 +96,7 @@ export async function resolveFixAction(videoId: string, _previous: DecisionState
       await applyEvent(deps, { videoId, event: "ABANDONED", actor: ownerActor(), note });
       return "abandoned";
     }
-    await resumeVideo(deps, { videoId, actor: ownerActor(), note, researchSources: sources?.ok ? sources.urls : undefined });
+    await resumeVideo(deps, { videoId, actor: ownerActor(), note, researchSources: sources?.ok ? sources.urls : undefined, returnTo: parsed.data.returnTo });
     return "resumed";
   });
 }
