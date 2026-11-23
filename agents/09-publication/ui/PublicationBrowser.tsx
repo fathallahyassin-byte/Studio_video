@@ -19,7 +19,7 @@ export function PublicationBrowser({ videos }: { videos: VideoView[] }) {
   const setSelectedId = (id: string) => setChoice({ id, forRequest: requested });
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(220px,300px)_minmax(0,1fr)]">
+    <div className="grid gap-5 xl:grid-cols-[minmax(220px,300px)_minmax(0,1fr)]">
       <ul aria-label="Vidéos programmées ou publiées" className="flex min-w-0 flex-col gap-2">
         {videos.map((video) => {
           const isSelected = video.videoId === selected?.videoId;

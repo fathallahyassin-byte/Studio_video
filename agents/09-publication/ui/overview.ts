@@ -139,8 +139,8 @@ function buildCard(video: VideoInput, platform: Platform, texts: Output | null, 
 
 function videoStatus(video: VideoInput, cards: readonly PlatformCardView[], textsReady: boolean): StatusView {
   if (cards.some((card) => card.awaitingAction)) return { label: "À publier à la main", tone: "wait" };
-  if (!textsReady) return { label: "Textes en préparation", tone: "run" };
   if (video.stage === "PUBLISHED") return { label: "Publiée", tone: "ok" };
+  if (!textsReady) return { label: "Textes en préparation", tone: "run" };
   return { label: "Programmée", tone: "run" };
 }
 
