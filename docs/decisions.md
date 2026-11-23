@@ -2,6 +2,16 @@
 
 Une entrée par décision, la plus récente en haut.
 
+## 2026-11-23 — Fichier d'un plan ajouté à la main (besoin du monteur, point 3)
+- Contexte : `agents/07-monteur/NEEDS.md` § 3. Tant qu'aucun générateur ni banque n'est branché, tout plan `stock`, `image_ia_animee` ou `video_ia` bloque la vidéo au montage (« Média manquant »).
+- Décision :
+  - Dans le panneau du directeur artistique, chaque plan sauf le texte animé a « Ajouter le fichier du plan » : image (JPEG, PNG, WebP) ou vidéo (MP4, MOV, WebM), 50 Mo au plus, **licence obligatoire**. Possible avant le rendu (visuels, montage, ou vidéo bloquée à ces étapes), comme « Régénérer ce plan ».
+  - Le fichier part dans le stockage S3 (`videos/<vidéo>/plans/<plan>-<empreinte>.<ext>`) et devient un `Asset` IMAGE ou VIDEO du plan (`provider` = « ajout manuel », `generationKey` = `vidéo:plan:manuel:sha256`) : un double envoi du même fichier ne crée rien. Le monteur prend déjà le dernier `Asset` du plan, généré ou ajouté. Aucun coût ajouté à la vidéo.
+  - `next.config.ts` : `serverActions.bodySizeLimit` et `proxyClientMaxBodySize` à 52 Mo (sinon `proxy.ts` coupe le corps à 10 Mo).
+  - Le message de blocage du monteur dit où ajouter le fichier, puis de relancer l'étape.
+- Alternatives écartées : envoi direct du navigateur vers S3 par URL présignée (une dépendance de plus et une règle CORS sur le bucket, pour des fichiers de quelques Mo) ; une banque de séquences (choix d'un fournisseur, toujours ouvert : `agents/05-directeur-artistique/NEEDS.md` § 4).
+- Reste ouvert : les effets sonores (pas de type d'`Asset` ni de banque, `agents/07-monteur/NEEDS.md` § 3).
+
 ## 2026-11-23 — Rendu Remotion sur le worker, stockage S3, besoins du monteur (agent 7)
 - Contexte : `agents/07-monteur/NEEDS.md` et étape 6 de la feuille de route. Choix du propriétaire : rendu sur la machine du worker (pas Remotion Lambda), stockage S3 branché tout de suite.
 - Décision :
