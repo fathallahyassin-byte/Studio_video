@@ -2,7 +2,7 @@ import { getAgentMeta, parseAgentId } from "@/agents/_shared/catalog";
 import { AgentNotImplementedError } from "@/agents/_shared/placeholder";
 import type { AgentId, AgentJobInput, AnyAgentDefinition } from "@/agents/_shared/types";
 import { agentRegistry } from "@/agents/registry";
-import { AgentPreconditionError } from "@/lib/agents/errors";
+import { AgentInputError, AgentPreconditionError } from "@/lib/agents/errors";
 import { createPrismaRunStore } from "@/lib/agents/prismaStore";
 import { runAgent } from "@/lib/agents/runAgent";
 import type { AgentJob, PrismaClient } from "@/lib/generated/prisma/client";
@@ -58,9 +58,11 @@ async function runAgentJob(job: AgentJob, agentId: AgentId, deps: JobDeps & { ll
   }
 }
 
-function classifyError(error: unknown, job: AgentJob): JobOutcome {
+export function classifyError(error: unknown, job: Pick<AgentJob, "attempts">): JobOutcome {
   const reason = error instanceof Error ? error.message : String(error);
   if (error instanceof AgentNotImplementedError) return { kind: "retry", delayMs: 6 * HOUR, reason };
+  // Entrée invalide (payload) : la réessayer ne changerait rien ; « failed » alerte l'humain.
+  if (error instanceof AgentInputError) return { kind: "failed", reason };
   // Configuration à corriger par l'humain (modèle, bible, variable) : on prévient à la première prise seulement.
   if (error instanceof AgentPreconditionError) return { kind: "retry", delayMs: HOUR, reason, alert: job.attempts <= 1 };
   if (job.attempts >= MAX_JOB_ATTEMPTS) return { kind: "failed", reason };

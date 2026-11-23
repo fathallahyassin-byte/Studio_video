@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { backoffMs } from "@/lib/queue/queue";
-import { isDueThisWeek } from "./schedule";
+import { isDueThisMonth, isDueThisWeek, monthKey } from "./schedule";
 
 describe("planning hebdomadaire", () => {
   const veille = { name: "veille" as const, hour: 7 };
@@ -18,5 +18,19 @@ describe("relances", () => {
   it("double le délai à chaque essai, sans dépasser une heure", () => {
     expect([1, 2, 3].map(backoffMs)).toEqual([30_000, 60_000, 120_000]);
     expect(backoffMs(20)).toBe(60 * 60 * 1000);
+  });
+});
+
+describe("rappel mensuel du stratège", () => {
+  it("attend le 1er à 9 h, puis le rattrape le reste du mois", () => {
+    expect(isDueThisMonth(9, new Date(2026, 11, 1, 8, 59))).toBe(false);
+    expect(isDueThisMonth(9, new Date(2026, 11, 1, 9))).toBe(true);
+    expect(isDueThisMonth(9, new Date(2026, 11, 2, 0))).toBe(true);
+    expect(isDueThisMonth(9, new Date(2026, 11, 31, 23))).toBe(true);
+  });
+
+  it("clé du mois en heure locale", () => {
+    expect(monthKey(new Date(2026, 11, 31, 23))).toBe("2026-12");
+    expect(monthKey(new Date(2027, 0, 1, 0))).toBe("2027-01");
   });
 });

@@ -1,4 +1,4 @@
-export type NotificationKind = "validation_waiting" | "agent_failed" | "budget_reached";
+export type NotificationKind = "validation_waiting" | "agent_failed" | "budget_reached" | "reminder";
 
 export type Notification = {
   kind: NotificationKind;

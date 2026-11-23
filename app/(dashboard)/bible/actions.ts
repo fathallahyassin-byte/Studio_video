@@ -7,7 +7,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireOwner } from "@/lib/auth/owner";
 import { applyBibleFields, checkBible, splitLines } from "@/lib/bible/bible";
-import { createActiveBibleVersion } from "@/lib/bible/store";
+import { activateBibleVersion as activateBibleVersionInDb, createActiveBibleVersion } from "@/lib/bible/store";
 import { getCurrentChannel } from "@/lib/dashboard/queries";
 import { getDb } from "@/lib/db";
 
@@ -98,12 +98,6 @@ export async function activateBibleVersion(versionId: string): Promise<void> {
   const db = getDb();
   const channel = await getCurrentChannel(db);
   if (!channel) return;
-  const version = await db.bibleVersion.findFirst({ where: { id: versionId, channelId: channel.id } });
-  if (!version) return;
-  const check = checkBible(version.content);
-  await db.channel.update({
-    where: { id: channel.id },
-    data: { activeBibleVersionId: version.id, ...(check.ok ? { niche: check.fields.niche } : {}) },
-  });
-  refresh();
+  const activated = await activateBibleVersionInDb(db, { channelId: channel.id, versionId });
+  if (activated) refresh();
 }

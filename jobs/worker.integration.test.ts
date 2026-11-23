@@ -11,7 +11,7 @@ import { claimNextJob, MAX_JOB_ATTEMPTS, requeueStaleJobs } from "@/lib/queue/qu
 import type { LlmProvider } from "@/lib/providers/llm";
 import type { Notification } from "@/lib/providers/notify";
 import { processNextJob, type JobDeps } from "./handlers";
-import { enqueueDueTasks } from "./schedule";
+import { enqueueDueTasks, sendDueReminders, STRATEGY_PATH } from "./schedule";
 
 const url = process.env.TEST_DATABASE_URL;
 const human = { kind: "human" as const, name: "moi@example.test" };
@@ -148,5 +148,23 @@ describe.skipIf(!url)("worker sur base réelle", () => {
     expect(first.filter((entry) => entry === "analyse 2026-W50").length).toBeGreaterThan(0);
     expect(first.filter((entry) => entry === "veille 2026-W50").length).toBe(first.length / 2);
     expect(second).toEqual([]);
+  });
+
+  it("rappel mensuel du stratège : une fois par chaîne et par mois, pas si une analyse a déjà été lancée", async () => {
+    const reminded = await db.channel.create({ data: { name: "Test rappel", niche: "test", platforms: ["TIKTOK"] } });
+    const launched = await db.channel.create({ data: { name: "Test rappel lancé", niche: "test", platforms: ["TIKTOK"] } });
+    const month = new Date(2031, 2, 5, 10);
+    await db.agentJob.create({
+      data: { jobKey: `strategie:${launched.id}:test`, kind: "AGENT", agentId: 1, channelId: launched.id, status: "DONE", createdAt: new Date(2031, 2, 2) },
+    });
+
+    const first = await sendDueReminders(pipeline(), month);
+    const second = await sendDueReminders(pipeline(), new Date(2031, 2, 20, 10));
+
+    expect(first.length).toBeGreaterThan(0);
+    expect(second).toEqual([]);
+    expect(await db.reminder.findUnique({ where: { key: `strategie:${reminded.id}:2031-03` } })).not.toBeNull();
+    expect(await db.reminder.findUnique({ where: { key: `strategie:${launched.id}:2031-03` } })).toBeNull();
+    expect(sent.filter((notification) => notification.kind === "reminder").every((notification) => notification.path === STRATEGY_PATH)).toBe(true);
   });
 });

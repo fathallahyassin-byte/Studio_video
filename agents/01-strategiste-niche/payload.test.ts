@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AgentPreconditionError } from "@/lib/agents/errors";
+import { AgentInputError, AgentPreconditionError } from "@/lib/agents/errors";
 import { PAYLOAD } from "./fixtures";
 import { parseStrategyForm, readStrategyPayload } from "./payload";
 import { buildStrategyVariables, formatContraintes, formatPistes, NO_PISTES, NO_REFUS } from "./variables";
@@ -14,7 +14,8 @@ describe("payload du worker", () => {
     ["sans objectif", { ...PAYLOAD, objectifRevenus: "  " }],
     ["heures négatives", { ...PAYLOAD, heuresParSemaine: -2 }],
     ["pistes en texte", { ...PAYLOAD, pistes: "a\nb" }],
-  ])("refuse un payload %s avec une AgentPreconditionError", (_label, payload) => {
+  ])("refuse un payload %s avec une AgentInputError (définitive, aucun appel)", (_label, payload) => {
+    expect(() => readStrategyPayload(payload)).toThrow(AgentInputError);
     expect(() => readStrategyPayload(payload)).toThrow(AgentPreconditionError);
   });
 
