@@ -2,6 +2,15 @@
 
 Une entrée par décision, la plus récente en haut.
 
+## 2026-11-23 — Besoins du son (agent 6) : voix enregistrées, interfaces TTS, Whisper et musique
+- Contexte : `agents/06-voix-son/NEEDS.md`. Aucun fournisseur de synthèse vocale, de transcription ni de musique n'est choisi (fournisseurs payants : CLAUDE.md §13).
+- Décision :
+  - `Asset.wordTimings` (JSON `[{ word, startS, endS }]`) et `Asset.timingSource` (`tts` ou `stt`), migration `20261123120000_voice_word_timings`. `createPrismaVoiceStore(db)` enregistre chaque voix une seule fois par `generationKey`, avec son coût sur la vidéo dans la même transaction ; l'horodatage Whisper est écrit une seule fois (une reprise ne le repaie pas).
+  - `TtsProvider.providesWordTimings` : sans horodatage du moteur ni Whisper, la voix est refusée avant d'être payée (avant : payée puis vidéo bloquée). `SttProvider.estimateCost(durationS)` : le coût de Whisper, estimé sur la durée maximale de la cible, entre dans l'estimation faite avant de payer la voix.
+  - Fabriques `getTtsProvider()`, `getSttProvider()` et `getMusicLibrary()` dans `lib/providers/`, lues par `configuredAudioTools()` ; elles renvoient `null` tant qu'aucun fournisseur n'est choisi. L'interface `MusicLibrary` passe de l'agent 6 à `lib/providers/music.ts`.
+- Alternatives écartées : stocker l'horodatage dans `audioJson` seulement (une voix réutilisée après reprise n'aurait plus ses mots) ; une table à part pour les voix (l'`Asset` VOICE existe déjà et porte la clé d'idempotence).
+- Restent ouverts : choix des fournisseurs (TTS, Whisper, musique), phrase du prompt sur les coupes (accord du propriétaire), plafond mensuel `BUDGET_MENSUEL`, lexique de prononciation (`TtsRequest.pronunciations`), `Asset.title`.
+
 ## 2026-11-23 — Fichier d'un plan ajouté à la main (besoin du monteur, point 3)
 - Contexte : `agents/07-monteur/NEEDS.md` § 3. Tant qu'aucun générateur ni banque n'est branché, tout plan `stock`, `image_ia_animee` ou `video_ia` bloque la vidéo au montage (« Média manquant »).
 - Décision :

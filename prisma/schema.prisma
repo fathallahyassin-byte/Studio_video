@@ -341,6 +341,10 @@ model Asset {
   durationS     Float?
   /// Médias générés : vidéo:plan:tentative:empreinte de la requête. Une génération payante déjà enregistrée n'est jamais relancée.
   generationKey String?   @unique
+  /// Voix : horodatage mot à mot [{ word, startS, endS }] ; null tant qu'il n'est pas récupéré
+  wordTimings   Json?
+  /// Voix : origine de l'horodatage, "tts" (moteur) ou "stt" (Whisper)
+  timingSource  String?
   createdAt     DateTime  @default(now())
 
   @@index([videoId, type])

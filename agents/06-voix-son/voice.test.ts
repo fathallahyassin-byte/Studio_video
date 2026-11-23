@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CUTS, makeStt, makeTts, makeVoiceStore, TTS_TEXT } from "./fixtures";
-import { fitVoice, pendingVoiceCost, produceVoice, voiceKey, type VoiceJob } from "./voice";
+import { fitVoice, pendingVoiceCost, produceVoice, voiceKey, whisperEstimate, type VoiceJob } from "./voice";
 
 const job = (changes: Partial<VoiceJob> = {}): VoiceJob => ({
   videoId: "video-1",
@@ -44,6 +44,22 @@ describe("produceVoice", () => {
   it("vidéo sortie de l'étape : rien n'est généré", async () => {
     const tts = makeTts();
     expect(await produceVoice(makeVoiceStore(), { tts, stt: null }, job({ isStillActive: async () => false }))).toEqual({ status: "stopped" });
+    expect(tts.requests).toEqual([]);
+  });
+
+  it("moteur sans horodatage et pas de Whisper : refus AVANT de payer la voix", async () => {
+    const tts = makeTts({ withWords: false });
+    expect(await produceVoice(makeVoiceStore(), { tts, stt: null }, job())).toEqual({ status: "no_timings" });
+    expect(tts.requests).toEqual([]);
+  });
+
+  it("moteur sans horodatage : le coût de Whisper entre dans l'estimation avant de payer", async () => {
+    const tts = makeTts({ withWords: false });
+    const stt = makeStt();
+    expect(whisperEstimate({ tts, stt }, job({ expectedDurationS: 30 }))).toBeCloseTo(0.003);
+    expect(whisperEstimate({ tts: makeTts(), stt }, job())).toBe(0);
+    const outcome = await produceVoice(makeVoiceStore(), { tts, stt }, job({ expectedDurationS: 30, remainingBudget: 0.05 }));
+    expect(outcome).toEqual({ status: "over_budget", estimate: expect.closeTo(0.052), remaining: 0.05 });
     expect(tts.requests).toEqual([]);
   });
 

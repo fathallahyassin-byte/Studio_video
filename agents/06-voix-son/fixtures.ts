@@ -160,6 +160,7 @@ export function makeTts(options: { durationOf?: (text: string) => number; withWo
   return {
     name: "faux-tts",
     supportedTags: ['<break time="0.5s"/>'],
+    providesWordTimings: options.withWords !== false,
     requests,
     estimateCost: (text) => spokenWords(text) / 1000,
     async synthesize(request) {
@@ -181,6 +182,7 @@ export function makeStt(): FakeStt {
   const requests: string[] = [];
   return {
     name: "faux-whisper",
+    estimateCost: (durationS) => durationS / 10000,
     requests,
     async transcribe(request) {
       requests.push(request.audioUrl);
