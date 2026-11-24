@@ -42,10 +42,10 @@ La page générique (en-tête, modèle, éditeur de prompt, historique des Agent
 
 ## Critères d'acceptation
 
-- [ ] `definition.ts` exporte une `AgentDefinition` conforme à `agents/_shared/types.ts`.
-- [ ] La sortie est validée par `schema.ts`, avec 2 relances maximum, puis `NEEDS_FIX`.
-- [ ] Chaque appel crée un AgentRun (prompt, bible, entrée, sortie, tokens, coût).
-- [ ] Désactivé, il n'est jamais appelé.
-- [ ] Activé, sa sortie ne peut pas faire sauter une validation V1, V2 ou V3 (vérifié par un test).
-- [ ] Tests Vitest : un exemple de sortie valide, un invalide, et les contrôles en code ci-dessus.
-- [ ] `ui/Panel.tsx` suit la maquette (police Archivo, noir, fond #F6F7F4, jaune #FFD60A réservé à ce qui attend une action).
+- [x] `definition.ts` exporte une `AgentDefinition` conforme à `agents/_shared/types.ts` (ports en lecture seule, `onSuccess` sans transition).
+- [x] La sortie est validée par `schema.ts`, avec 2 relances maximum, puis `NEEDS_FIX` (voir NEEDS.md, point 3).
+- [x] Chaque appel crée un AgentRun (prompt, bible, entrée, sortie, tokens, coût).
+- [x] Désactivé, il n'est jamais appelé (refusé par `runAgent` et par la définition ; le déclenchement reste à brancher, voir NEEDS.md).
+- [x] Activé, sa sortie ne peut pas faire sauter une validation V1, V2 ou V3 (vérifié par un test : `rules.test.ts`, `definition.test.ts`).
+- [x] Tests Vitest : un exemple de sortie valide, un invalide, et les contrôles en code ci-dessus.
+- [x] `ui/Panel.tsx` suit la maquette (police Archivo, noir, fond #F6F7F4, jaune #FFD60A réservé à ce qui attend une action).
